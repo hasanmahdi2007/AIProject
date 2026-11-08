@@ -41,3 +41,6 @@ Thumbs.db
 
 # Claude Code session state and agent worktrees - never committed.
 .claude/
+
+# Unrelated coursework that lives in this folder; swept in once by a git add -A.
+/CSC301*.pdf

@@ -73,10 +73,22 @@ PipelineStep = Literal[
     "profile_patient",
     "generate_queries",
     "retrieve",
+    "parse_rules",
     "check_rules",
     "verify",
     "rank_and_explain",
 ]
+"""The seven worker nodes, in order.
+
+``parse_rules`` was missing from the first draft of this contract, which left the
+code at six steps while the design documents and the C1 brief both specified
+seven. Added 8 Nov: splitting a trial's eligibility text into individual rules is
+its own node because it is *lazy and cached* - a trial is parsed once, ever, into
+``trial_criteria``, and reused for every later patient. Folding it into
+``check_rules`` would re-parse per patient, and folding it into ``retrieve`` would
+put it on the search path.
+
+Additive change: nothing that used the other six values is affected."""
 
 QueryFacet = Literal["diagnosis", "biomarker", "prior_therapy", "setting", "other"]
 """With only N=3 query slots, the generator is instructed to spend one per

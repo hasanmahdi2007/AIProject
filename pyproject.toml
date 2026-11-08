@@ -111,7 +111,21 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-q --strict-markers --import-mode=importlib"
-norecursedirs = [".venv", ".git", "web", "node_modules", "alembic", "__pycache__", "*.egg-info"]
+norecursedirs = [
+    ".venv",
+    ".git",
+    "web",
+    "node_modules",
+    "alembic",
+    "__pycache__",
+    "*.egg-info",
+    # Agent worktrees are full checkouts of the repo living inside it. Without
+    # this, pytest collects every one of them: the suite ballooned from 169 to
+    # 1101 tests and a failure in some agent's in-progress branch would have
+    # broken verification on master. ruff and mypy skip them already because
+    # they honour .gitignore; pytest does not.
+    ".claude",
+]
 markers = [
     "integration: needs Docker (testcontainers); excluded from the fast unit run",
 ]

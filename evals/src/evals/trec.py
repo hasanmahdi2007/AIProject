@@ -62,7 +62,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_IR_DATASETS_HOME = Path("C:/Users/hasan/ir_datasets")
 """Fallback when ``BEACON_IR_DATASETS_HOME`` is unset, on this developer's box.
 
-Deliberately outside the repo: the corpus is tens of GB and must never land in
+Deliberately outside the repo: the corpus is ~1.79 GB compressed (~2.6 GB
+cached, measured 8 Nov) and must never land in
 a git worktree. Overridden by ``BEACON_IR_DATASETS_HOME`` in ``.env``.
 """
 
@@ -91,7 +92,7 @@ def _configure_ir_datasets_home() -> Path:
             home = POSIX_FALLBACK_IR_DATASETS_HOME
         logger.warning(
             "BEACON_IR_DATASETS_HOME is unset; defaulting ir_datasets cache to %s. "
-            "Set BEACON_IR_DATASETS_HOME in .env to override (needs >=25 GB free).",
+            "Set BEACON_IR_DATASETS_HOME in .env to override (needs ~3 GB free).",
             home,
         )
     home.mkdir(parents=True, exist_ok=True)
@@ -314,7 +315,7 @@ def iter_trials(*, skip: int = 0, limit: int | None = None) -> Iterator[Trial]:
     """Lazily yield trials from the 375,580-document collection.
 
     Never materialises the collection: this is a generator, and callers should
-    keep it that way. Downloads ~tens of GB on first use, so it is excluded
+    keep it that way. Downloads ~1.79 GB on first use, so it is excluded
     from CI and any test touching it is marked ``@pytest.mark.integration``.
 
     Args:

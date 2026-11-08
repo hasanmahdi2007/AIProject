@@ -169,8 +169,12 @@ class Settings(BaseSettings):
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
 
     ir_datasets_home: Path | None = None
-    """The TREC corpus is large; point this at >=25 GB of free space outside the
-    repo so ingestion and evals agree on one copy."""
+    """Where the TREC corpus is cached. Point it outside the repo so ingestion and
+    evals agree on one copy.
+
+    Measured 8 Nov: the corpus is **1.79 GB** of archives, about 2.6 GB once
+    cached - not the ">=25 GB" the project guide estimates. Allow a few GB, not
+    twenty-five."""
 
     otel_endpoint: str = "http://localhost:6006/v1/traces"
     llm_fixtures_dir: Path = REPO_ROOT / "tests" / "fixtures" / "llm"
