@@ -16,6 +16,13 @@ export interface TrialResultsProps {
   /** `${nct_id}::${criterion_id}` of the rule whose evidence is highlighted. */
   selectedRuleKey: string | null;
   onSelectRule: (nctId: string, judgment: CriterionJudgment) => void;
+  /**
+   * The sentence IDs the numbered note actually contains, or `null` when the
+   * run returned no note. Used only to flag a citation that points at a
+   * sentence that does not exist: invalid citations are a measured metric in
+   * this project, so one is shown as a problem rather than quietly dropped.
+   */
+  validSentenceIds: ReadonlySet<number> | null;
 }
 
 export function ruleKey(nctId: string, criterionId: string): string {
@@ -36,10 +43,12 @@ function RuleTable({
   trial,
   selectedRuleKey,
   onSelectRule,
+  validSentenceIds,
 }: {
   trial: RankedTrial;
   selectedRuleKey: string | null;
   onSelectRule: TrialResultsProps["onSelectRule"];
+  validSentenceIds: ReadonlySet<number> | null;
 }) {
   const nctId = trial.candidate.nct_id;
 
@@ -70,6 +79,10 @@ function RuleTable({
           const selected = key === selectedRuleKey;
           const chip = CRITERION_LABELS[judgment.label];
           const cited = judgment.evidence_sentence_ids;
+          const unresolved =
+            validSentenceIds === null
+              ? []
+              : cited.filter((id) => !validSentenceIds.has(id));
 
           return (
             <tr
@@ -126,6 +139,12 @@ function RuleTable({
                     </span>
                   )}
                 </p>
+                {unresolved.length > 0 ? (
+                  <p className="mt-1 rounded bg-rose-100 px-1.5 py-1 text-xs font-semibold text-rose-900">
+                    Invalid citation: sentence {unresolved.join(", ")} is not in
+                    the numbered note, so this verdict cannot be checked.
+                  </p>
+                ) : null}
               </td>
             </tr>
           );
@@ -141,12 +160,14 @@ function TrialCard({
   onToggleTrial,
   selectedRuleKey,
   onSelectRule,
+  validSentenceIds,
 }: {
   trial: RankedTrial;
   isOpen: boolean;
   onToggleTrial: TrialResultsProps["onToggleTrial"];
   selectedRuleKey: string | null;
   onSelectRule: TrialResultsProps["onSelectRule"];
+  validSentenceIds: ReadonlySet<number> | null;
 }) {
   const { candidate, judgment } = trial;
   const category = ELIGIBILITY_CATEGORIES[judgment.category];
@@ -216,6 +237,7 @@ function TrialCard({
                 trial={trial}
                 selectedRuleKey={selectedRuleKey}
                 onSelectRule={onSelectRule}
+                validSentenceIds={validSentenceIds}
               />
             </div>
           </div>
@@ -281,6 +303,7 @@ export function TrialResults({
   onToggleTrial,
   selectedRuleKey,
   onSelectRule,
+  validSentenceIds,
 }: TrialResultsProps) {
   if (results.length === 0) {
     return (
@@ -306,6 +329,7 @@ export function TrialResults({
             onToggleTrial={onToggleTrial}
             selectedRuleKey={selectedRuleKey}
             onSelectRule={onSelectRule}
+            validSentenceIds={validSentenceIds}
           />
         ))}
       </ul>

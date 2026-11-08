@@ -237,6 +237,9 @@ export default function ConsolePage() {
 
   const bundle = run.bundle;
   const results = bundle?.results ?? [];
+  const validSentenceIds = bundle?.note
+    ? new Set(bundle.note.sentences.map((sentence) => sentence.sentence_id))
+    : null;
 
   return (
     <div className="space-y-5">
@@ -352,6 +355,7 @@ export default function ConsolePage() {
                   onToggleTrial={handleToggleTrial}
                   selectedRuleKey={selectedRuleKey}
                   onSelectRule={handleSelectRule}
+                  validSentenceIds={validSentenceIds}
                 />
               </div>
               {bundle.duration_ms !== undefined ? (

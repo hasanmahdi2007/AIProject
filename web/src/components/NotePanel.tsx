@@ -99,10 +99,25 @@ export function NotePanel({
       )}
 
       {unresolved.length > 0 ? (
-        <p className="border-t border-slate-200 px-4 py-2 text-xs text-slate-600">
-          This rule cites sentence {unresolved.join(", ")}, which is not present
-          in the numbered note, so it cannot be highlighted.
-        </p>
+        <div
+          role="alert"
+          className="border-t-2 border-rose-400 bg-rose-50 px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-rose-900">
+            Invalid citation: sentence{" "}
+            {unresolved.length === 1 ? "" : "s "}
+            {unresolved.join(", ")} {unresolved.length === 1 ? "does" : "do"} not
+            exist in this note.
+          </p>
+          <p className="mt-1 text-sm text-rose-900">
+            The selected rule cites {unresolved.length === 1 ? "an" : ""}{" "}
+            sentence {unresolved.length === 1 ? "id" : "ids"} outside the
+            numbered note, so the evidence cannot be shown and the rule&apos;s
+            verdict is not checkable. The verifier node is supposed to catch
+            this before a result is returned; seeing it here means a citation
+            escaped verification.
+          </p>
+        </div>
       ) : null}
     </section>
   );
