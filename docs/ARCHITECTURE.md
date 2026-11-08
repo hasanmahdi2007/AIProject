@@ -192,11 +192,11 @@ one Claude call receives the standing instructions, the numbered note and that
 trial's rules, and must return one `CriterionJudgment` per rule:
 
 ```python
-class CriterionJudgment(Contract):          # beacon_core.schemas — FROZEN
+class CriterionJudgment(Contract):  # beacon_core.schemas — FROZEN
     criterion_id: str
     kind: Literal["inclusion", "exclusion"]
     label: Literal["met", "not_met", "insufficient_info", "not_applicable"]
-    evidence_sentence_ids: list[int]        # must point at real sentences
+    evidence_sentence_ids: list[int]  # must point at real sentences
     explanation: str
 ```
 
