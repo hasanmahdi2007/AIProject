@@ -1,0 +1,226 @@
+# Beacon local stack -- five backing services, nothing application-level.
+#
+#   docker compose -f deploy/compose.yaml up -d
+#   docker compose -f deploy/compose.yaml ps     # all five must read (healthy)
+#   docker compose -f deploy/compose.yaml down   # named volumes survive
+#
+# Every default here matches the defaults in beacon_core.settings
+# (PostgresSettings, RedisSettings, QdrantSettings, KafkaSettings), so
+# `uv run alembic upgrade head` works against this stack with an empty .env.
+#
+# Image tags are pinned to exact patch versions. A floating tag (`:latest`, or
+# even `:17`) means two machines can run different software from the same file,
+# which is the whole failure mode pinning exists to prevent.
+
+name: beacon
+
+services:
+  # --- Postgres: requests, outbox, match results, llm_calls -------------------
+  # Alembic is the single source of truth for the schema; init.sql only creates
+  # the databases. POSTGRES_DB stays `postgres` so the entrypoint does not
+  # create `beacon` behind init.sql's back.
+  postgres:
+    image: postgres:17.11
+    environment:
+      POSTGRES_USER: beacon
+      POSTGRES_PASSWORD: beacon
+      POSTGRES_DB: postgres
+      # Deterministic collation, so an ORDER BY does not depend on the host locale.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      # Two parts on purpose. pg_isready over TCP on 127.0.0.1 proves the real
+      # listener is up -- during initdb the server listens on the unix socket
+      # only, so a socket-based check reports healthy while the port is still
+      # closed. The psql probe then proves init.sql actually ran: pg_isready
+      # returns 0 even when the target database does not exist, so on its own it
+      # would let the container go healthy before `beacon` existed and race
+      # `alembic upgrade head`.
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -h 127.0.0.1 -p 5432 -U "$$POSTGRES_USER" -d beacon -q && PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$$POSTGRES_USER" -d beacon -tAc "SELECT 1" | grep -q 1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 30s
+    restart: unless-stopped
+    networks: [beacon]
+
+  # --- Redis: conversation history behind beacon_core.protocols.ConversationStore
+  redis:
+    image: redis:8.10.3
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --dir
+      - /data
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      # redis-cli ping goes through the real command pipeline, so a server still
+      # loading its AOF answers LOADING rather than PONG and stays unhealthy.
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks: [beacon]
+
+  # --- Qdrant: the `trials` collection, dense + sparse named vectors ----------
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: INFO
+      QDRANT__TELEMETRY_DISABLED: "true"
+    ports:
+      # HTTP only. gRPC (6334) stays unpublished because QdrantSettings names a
+      # single port and the brief fixes the host port list at five.
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # The image carries no curl and no wget, so this speaks HTTP down bash's
+      # /dev/tcp and greps the status line. /readyz (not /healthz) is the one
+      # that waits for shards to finish loading from disk, which is what a
+      # dependent service actually needs -- /healthz answers 200 while the
+      # collection is still unusable.
+      #
+      # Exec form with an explicit `bash`, not CMD-SHELL: CMD-SHELL runs /bin/sh,
+      # which here is dash, and dash has no /dev/tcp -- it fails with
+      # "cannot create /dev/tcp/...: Directory nonexistent" and the container
+      # never goes healthy.
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          'exec 3<>/dev/tcp/127.0.0.1/6333 && printf "GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && grep -q "200 OK" <&3',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [beacon]
+
+  # --- Redpanda: match.requested / match.completed / match.dlq ---------------
+  redpanda:
+    image: redpandadata/redpanda:v26.2.6
+    command:
+      - redpanda
+      - start
+      # Two listeners, because a Kafka client is told where to reconnect by the
+      # broker's advertised address -- bootstrapping successfully proves nothing.
+      #
+      #   internal : bound :9092, advertised redpanda:9092
+      #              -> sibling containers use redpanda:9092 on this network.
+      #   external : bound :19092, advertised localhost:9092, published as
+      #              host 9092 -> container 19092.
+      #              -> the host uses localhost:9092, which is exactly the
+      #                 KafkaSettings.bootstrap_servers default.
+      #
+      # The advertised port may differ from the bound port, and here it must:
+      # both audiences need to see port 9092, and two listeners cannot share one
+      # container port. Advertise redpanda:9092 to the host and host clients
+      # fail on an unresolvable name; advertise localhost:9092 to containers and
+      # each one reconnects to itself.
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:9092
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --default-log-level=info
+    ports:
+      # Host 9092 -> the external listener on 19092. See the listener note above.
+      - "9092:19092"
+      # The admin API (9644) stays unpublished: the healthcheck reaches it from
+      # inside the container, and the brief fixes the host port list at five.
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      # rpk asks the admin API for the real cluster state. A bare `rpk version`
+      # or a TCP probe would pass while the controller still had no leader and
+      # every produce call failed.
+      test: ["CMD-SHELL", "rpk cluster health | grep -qE 'Healthy:.+true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
+    networks: [beacon]
+
+  # --- Phoenix: OTel trace sink and the eval UI ------------------------------
+  phoenix:
+    image: arizephoenix/phoenix:21.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Traces in Postgres, not a SQLite file, so they outlive the container and
+      # survive the `down`/`up` cycle the same way the application data does.
+      PHOENIX_SQL_DATABASE_URL: postgresql://beacon:beacon@postgres:5432/phoenix
+      PHOENIX_WORKING_DIR: /mnt/data
+      PHOENIX_PORT: "6006"
+      PHOENIX_HOST: 0.0.0.0
+      PHOENIX_ENABLE_PROMETHEUS: "false"
+    ports:
+      # UI and the OTLP/HTTP endpoint that Settings.otel_endpoint points at
+      # (http://localhost:6006/v1/traces). OTLP/gRPC (4317) stays unpublished:
+      # Settings.otel_endpoint is the HTTP one, and the brief fixes the host port
+      # list at five.
+      - "6006:6006"
+    volumes:
+      - phoenix-data:/mnt/data
+    healthcheck:
+      # Distroless image: no shell, no curl, no wget -- only the Python runtime,
+      # so the probe is a Python one-liner in exec form. A non-200 or a refused
+      # connection raises and exits non-zero.
+      #
+      # Two details that silently break this. The interpreter must be named by
+      # absolute path: a healthcheck does not go through the image entrypoint
+      # (which is /usr/bin/python3.13 here), and there is no bare `python` on
+      # PATH. And the probe targets 127.0.0.1, not localhost: PHOENIX_HOST is
+      # set to 0.0.0.0, so a `localhost` that resolves to ::1 first would be
+      # refused even though the server is up.
+      test:
+        [
+          "CMD",
+          "/usr/bin/python3.13",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:6006/healthz', timeout=5).status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+    networks: [beacon]
+
+networks:
+  beacon:
+    name: beacon
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  redpanda-data:
+  phoenix-data:
