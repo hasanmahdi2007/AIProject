@@ -145,19 +145,19 @@ confirmed-fraction of otherwise fine trials.
 _HEADER_RE = re.compile(
     r"""^
     [ \t]*
-    (?:[-–—*•·●]+[ \t]+)?        # header may be bulleted
+    (?:[-\u2013\u2014*\u2022\u00b7\u25cf]+[ \t]+)?        # header may be bulleted
     (?P<pre>[^:\n]{0,28}?)
     \b(?P<kind>inclusion|inclusions|include|included|includes
        |exclusion|exclusions|exclude|excluded|excludes
        |ineligibility|eligibility)\b
     (?P<post>[^:\n]{0,60}?)
-    [ \t]*[:：][ \t]*
+    [ \t]*[:\uff1a][ \t]*
     (?P<rest>.*)$
     """,
     re.IGNORECASE | re.VERBOSE,
 )
 
-_HEADER_PRE_RE = re.compile(r"^[a-z()/&' \t–-]*$", re.IGNORECASE)
+_HEADER_PRE_RE = re.compile(r"^[a-z()/&' \t\u2013-]*$", re.IGNORECASE)
 """The words allowed before the keyword (``Key``, ``Main``, ``Patient``, ...).
 
 Digits or punctuation there mean the line is a rule that mentions exclusion,
@@ -174,7 +174,9 @@ _NEUTRAL_KEYWORDS = frozenset({"eligibility"})
 and must not survive as a rule of its own."""
 
 # --- bullet markers ---------------------------------------------------------
-_DASH_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>[-–—*•·●▪])[ \t]+(?=\S)")
+_DASH_RE = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<marker>[-\u2013\u2014*\u2022\u00b7\u25cf\u25aa])[ \t]+(?=\S)"
+)
 _NUMBER_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>\(?\d{1,2}[.):])[ \t]+(?=\S)")
 _ALPHA_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>\(?[a-zA-Z][.)])[ \t]+(?=\S)")
 
@@ -220,9 +222,7 @@ class SplitResult:
     @property
     def is_fallback(self) -> bool:
         """True when no criterion came from the author's own markers."""
-        return bool(self.criteria) and all(
-            c.parser == PARSER_UNSTRUCTURED for c in self.criteria
-        )
+        return bool(self.criteria) and all(c.parser == PARSER_UNSTRUCTURED for c in self.criteria)
 
 
 def criterion_id(nct_id: str, kind: str, sequence: int) -> str:
@@ -239,8 +239,8 @@ def _normalise(text: str) -> list[str]:
     cleaned = (
         text.replace("\r\n", "\n")
         .replace("\r", "\n")
-        .replace(" ", " ")
-        .replace(" ", "\n")
+        .replace("\u00a0", " ")
+        .replace("\u2028", "\n")
         .expandtabs(4)
     )
     return [line.rstrip() for line in cleaned.split("\n")]
@@ -346,9 +346,7 @@ def _is_non_criterion(text: str) -> bool:
     return len(text) < MIN_CRITERION_CHARS or key in NON_CRITERIA_TEXTS
 
 
-def _items_from_markers(
-    lines: tuple[str, ...], markers: dict[int, tuple[int, int]]
-) -> list[str]:
+def _items_from_markers(lines: tuple[str, ...], markers: dict[int, tuple[int, int]]) -> list[str]:
     """Group marked lines into items, folding genuine sub-lists into parents.
 
     The top level is the indent of the *first* marker in the section, not the

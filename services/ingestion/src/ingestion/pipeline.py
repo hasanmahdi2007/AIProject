@@ -215,8 +215,6 @@ def derive_trial(raw: RawTrial, builder: OverviewBuilder) -> DerivedTrial:
         sex=parse_sex(raw.raw_gender),
         phase=normalise_phase(raw.phase),
         status=normalise_status(raw.status),
-        overview=builder.build(
-            raw.title, raw.conditions, raw.interventions, raw.brief_summary
-        ),
+        overview=builder.build(raw.title, raw.conditions, raw.interventions, raw.brief_summary),
         split=split_eligibility(raw.nct_id, raw.eligibility_text),
     )

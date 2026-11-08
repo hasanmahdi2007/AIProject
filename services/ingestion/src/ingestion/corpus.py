@@ -164,7 +164,7 @@ def parse_trial_xml(data: bytes | str, *, nct_id: str | None = None) -> RawTrial
             natural key for both stores and guessing one would silently merge
             two trials.
     """
-    root = ET.fromstring(data) if isinstance(data, bytes) else ET.fromstring(data)
+    root = ET.fromstring(data)
 
     resolved = _find_text(root, "id_info/nct_id") or nct_id
     if not resolved:
@@ -202,7 +202,7 @@ def _require_cache() -> None:
         raise CorpusNotCachedError(
             f"The TREC collection archives are not in {CORPUS_DIR}. Expected "
             f"{', '.join(CORPUS_ZIP_NAMES)}. Fetch the corpus first (it is ~1.8 GB "
-            "compressed) with `uv run python -c \"from evals.trec import iter_trials; "
+            'compressed) with `uv run python -c "from evals.trec import iter_trials; '
             'next(iter_trials(limit=1))"` and re-run ingestion.'
         )
 
@@ -297,7 +297,13 @@ def cross_check_against_ir_datasets(sample: int = 200) -> dict[str, int]:
     from evals.trec import iter_trials
 
     counts = dict.fromkeys(
-        ("checked", "id_mismatch", "title_mismatch", "eligibility_mismatch", "irds_condition_empty"),
+        (
+            "checked",
+            "id_mismatch",
+            "title_mismatch",
+            "eligibility_mismatch",
+            "irds_condition_empty",
+        ),
         0,
     )
     by_id = {raw.nct_id: raw for raw in iter_raw_trials(limit=sample)}

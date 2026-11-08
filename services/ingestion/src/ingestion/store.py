@@ -42,13 +42,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from beacon_core.models import Trial, TrialCriterion
-from beacon_core.settings import QdrantSettings
 from qdrant_client import AsyncQdrantClient, models
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beacon_core.models import Trial, TrialCriterion
+from beacon_core.settings import QdrantSettings
 from ingestion.criteria import Criterion
 from ingestion.embedding import SparseValues
 
@@ -213,11 +213,7 @@ async def mark_indexed(
     if not nct_ids:
         return
     stamp = when or datetime.now(UTC)
-    await session.execute(
-        Trial.__table__.update()
-        .where(Trial.nct_id.in_(nct_ids))
-        .values(indexed_at=stamp)
-    )
+    await session.execute(update(Trial).where(Trial.nct_id.in_(nct_ids)).values(indexed_at=stamp))
 
 
 async def indexed_nct_ids(session: AsyncSession) -> set[str]:
@@ -238,7 +234,9 @@ async def count_trials(session: AsyncSession, *, indexed_only: bool = False) -> 
 
 
 async def count_criteria(session: AsyncSession) -> int:
-    return int((await session.execute(select(func.count()).select_from(TrialCriterion))).scalar() or 0)
+    return int(
+        (await session.execute(select(func.count()).select_from(TrialCriterion))).scalar() or 0
+    )
 
 
 # ------------------------------------------------------------------- Qdrant --
@@ -299,9 +297,7 @@ class QdrantIndex:
 
     async def _verify_sparse_modifier(self) -> None:
         info = await self._client.get_collection(self.collection)
-        sparse = (info.config.params.sparse_vectors or {}).get(
-            self._settings.sparse_vector_name
-        )
+        sparse = (info.config.params.sparse_vectors or {}).get(self._settings.sparse_vector_name)
         if sparse is None:
             raise SparseModifierMismatch(
                 f"collection {self.collection!r} has no sparse vector field "

@@ -31,7 +31,6 @@ from dataclasses import dataclass
 from beacon_core.db import dispose_engine, session_scope
 from beacon_core.logging import get_logger
 from beacon_core.settings import Settings, get_settings
-
 from ingestion import store
 from ingestion.corpus import EXPECTED_TRIAL_COUNT, iter_raw_trials
 from ingestion.embedding import Encoder
@@ -68,9 +67,7 @@ class RunConfig:
     threads: int | None = None
 
 
-def _batched(
-    items: Iterator[DerivedTrial], size: int
-) -> Iterator[list[DerivedTrial]]:
+def _batched(items: Iterator[DerivedTrial], size: int) -> Iterator[list[DerivedTrial]]:
     batch: list[DerivedTrial] = []
     for item in items:
         batch.append(item)
@@ -164,14 +161,13 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
         written = 0
         skipped = 0
         errors = 0
-        batches = 0
 
         def derived_stream() -> Iterator[DerivedTrial]:
             nonlocal errors, skipped
             for raw in iter_raw_trials(skip=config.skip, limit=config.limit):
                 try:
                     derived = derive_trial(raw, builder)
-                except Exception:  # noqa: BLE001 - one bad record must not stop the job
+                except Exception:
                     errors += 1
                     logger.exception("ingest.derive_failed", nct_id=raw.nct_id)
                     continue
@@ -181,8 +177,7 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
                     continue
                 yield derived
 
-        for batch in _batched(derived_stream(), config.batch_size):
-            batches += 1
+        for batches, batch in enumerate(_batched(derived_stream(), config.batch_size), start=1):
             if config.dry_run:
                 written += len(batch)
             else:
@@ -225,9 +220,7 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
             summary["qdrant_points"] = await index.count()
             async with session_scope() as session:
                 summary["pg_trials"] = await store.count_trials(session)
-                summary["pg_trials_indexed"] = await store.count_trials(
-                    session, indexed_only=True
-                )
+                summary["pg_trials_indexed"] = await store.count_trials(session, indexed_only=True)
                 summary["pg_criteria"] = await store.count_criteria(session)
         logger.info("ingest.done", **summary)
         return stats

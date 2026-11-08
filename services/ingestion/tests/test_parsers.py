@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ingestion._testing import AGE_CASES, SEX_CASES, REAL_RECORDS, record
+from ingestion._testing import AGE_CASES, REAL_RECORDS, SEX_CASES, record
 from ingestion.parsers import (
     normalise_phase,
     normalise_status,

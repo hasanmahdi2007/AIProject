@@ -15,12 +15,13 @@ from ingestion.criteria import (
     MAX_CRITERIA_PER_TRIAL,
     PARSER_RULES,
     PARSER_UNSTRUCTURED,
+    SplitResult,
     criterion_id,
     split_eligibility,
 )
 
 
-def _split(nct_id: str):
+def _split(nct_id: str) -> SplitResult:
     return split_eligibility(nct_id, record(nct_id).criteria)
 
 
@@ -283,8 +284,12 @@ def test_no_content_is_silently_dropped(nct_id: str) -> None:
     if not result.criteria:
         return
     joined = " ".join(c.text for c in result.criteria)
-    # Sample long words, which are content rather than list scaffolding.
-    words = {w for w in source.split() if len(w) > 8 and w.isalpha()}
+    # Sample long words, which are content rather than list scaffolding. The
+    # header vocabulary is excluded because removing it is the job.
+    scaffolding = {"inclusion", "exclusion", "criteria", "eligibility"}
+    words = {
+        w for w in source.split() if len(w) > 8 and w.isalpha() and w.lower() not in scaffolding
+    }
     missing = {w for w in words if w not in joined}
     assert not missing, f"{nct_id} dropped {sorted(missing)[:5]}"
 
