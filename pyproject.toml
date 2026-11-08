@@ -1,0 +1,128 @@
+[project]
+name = "beacon"
+version = "0.1.0"
+description = "Beacon - clinical trial matching engine (workspace root)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beacon-core",
+    "beacon-llm",
+    "gateway",
+    "retrieval",
+    "match-worker",
+    "ingestion",
+    "evals",
+]
+
+[tool.uv.workspace]
+members = ["libs/*", "services/*", "evals"]
+
+[tool.uv.sources]
+beacon-core = { workspace = true }
+beacon-llm = { workspace = true }
+gateway = { workspace = true }
+retrieval = { workspace = true }
+match-worker = { workspace = true }
+ingestion = { workspace = true }
+evals = { workspace = true }
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "alembic>=1.14",
+    "mypy>=1.13",
+    # Sync driver, for the integration tests only. The services all use
+    # asyncpg; this exists so a test can open a plain connection without an
+    # event loop, and so it is a declared dependency rather than a transitive
+    # one inherited from langgraph-checkpoint-postgres.
+    "psycopg[binary]>=3.2",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "ruff>=0.8",
+    "testcontainers>=4.8",
+    "types-requests>=2.32",
+]
+
+# ---------------------------------------------------------------- tooling ----
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    ".venv",
+    "alembic/versions",
+    # Moved here unmodified by W0 so git keeps their history. Agent A2 owns
+    # them, fixes the three defects (poisoned history, in-process dict,
+    # errors written into the response body) and DELETES these three lines
+    # together with the matching mypy exclusion below.
+    "services/gateway/src/gateway/main.py",
+    "services/gateway/src/gateway/router.py",
+    "services/gateway/src/gateway/service.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "ASYNC", "RUF"]
+ignore = [
+    "B008",    # FastAPI Depends() in defaults is idiomatic
+    "RUF012",  # ClassVar annotations not required on pydantic model config
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.lint.isort]
+# Without this, ruff guesses from the directory layout and calls the workspace
+# packages third-party while treating the alembic/ folder as first-party.
+known-first-party = [
+    "beacon_core",
+    "beacon_llm",
+    "gateway",
+    "retrieval",
+    "match_worker",
+    "ingestion",
+    "evals",
+]
+known-third-party = ["alembic"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
+exclude = [
+    '^\.venv/',
+    '^alembic/versions/',
+    '^web/',
+    # See the matching ruff exclusion above: A2 owns these and removes this.
+    '^services/gateway/src/gateway/(main|router|service)\.py$',
+]
+mypy_path = [
+    "libs/beacon-core/src",
+    "libs/beacon-llm/src",
+    "services/gateway/src",
+    "services/retrieval/src",
+    "services/match_worker/src",
+    "services/ingestion/src",
+    "evals/src",
+]
+
+[[tool.mypy.overrides]]
+module = ["ir_datasets.*", "ranx.*", "fastembed.*", "textstat.*", "aiokafka.*", "testcontainers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q --strict-markers"
+markers = [
+    "integration: needs Docker (testcontainers); excluded from the fast unit run",
+]

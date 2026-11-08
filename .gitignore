@@ -1,6 +1,7 @@
 # Environment / secrets
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -8,6 +9,29 @@ __pycache__/
 .venv/
 venv/
 env/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and models. The TREC corpus is tens of GB and lives outside the repo
+# via IR_DATASETS_HOME; these patterns are the safety net.
+data/
+*.parquet
+*.jsonl.gz
+.cache/
+models/
+
+# Node / web console
+node_modules/
+web/.next/
+web/out/
 
 # Editors / OS
 .vscode/
