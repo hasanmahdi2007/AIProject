@@ -1,0 +1,75 @@
+{
+  "key": "66beb6f8b001579bb2ec40bbc6450add69a7b267b1d78b717f684623172da45c",
+  "latency_ms": 2642.300899955444,
+  "recorded_at": "2026-11-08T10:51:57.193666+00:00",
+  "request": {
+    "effort": "low",
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Trial NCT04000001, criterion INC-3, presented as an inclusion criterion:\nHistologically confirmed hormone receptor positive, HER2 negative metastatic breast cancer.\nJudge criterion INC-3 against the numbered note above.",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-haiku-5-5",
+    "output_schema": "CriterionJudgment",
+    "system": [
+      {
+        "text": "You are a clinical trial eligibility assistant. You are given a patient note split into numbered sentences, followed by one eligibility criterion from one clinical trial. Judge that single criterion against that note and return one JSON object describing your judgment.\n\nRules of judgment, in order of precedence:\n\n1. Judge only the criterion you are given. Do not comment on any other criterion, do not summarise the trial, and do not state an overall eligibility verdict. A separate step aggregates your judgments.\n2. Use only facts stated in the numbered note. Do not infer a diagnosis from a medication, do not infer a stage from a treatment line, and do not assume a negative finding because a positive one is absent. The note is the only evidence you have.\n3. If the note does not contain the fact the criterion turns on, label the criterion insufficient_info. This is a correct and expected answer, not a failure. It is how a missing fact becomes a question for a human rather than a guess with a confident explanation attached. Abstaining is always preferable to inferring.\n4. If the criterion does not apply to this patient at all - a pregnancy criterion for a male patient, a prior-therapy criterion for a treatment-naive patient - label it not_applicable rather than met or not_met.\n5. Label a criterion met only when the note states the fact positively. Label it not_met only when the note states a fact that positively contradicts it. Silence is never contradiction.\n\nEvidence requirements:\n\nEvery judgment other than not_applicable must cite at least one sentence ID from the numbered note, in evidence_sentence_ids. Cite the sentence that carries the fact you relied on, not the sentence that merely mentions the same topic. Cite several IDs when the judgment rests on several facts. The IDs you cite are checked against the note by code before your answer is used, so an ID that is not in the note invalidates the whole judgment.\n\nThe explanation field is one or two sentences of plain clinical English, addressed to a research coordinator who will read it next to the criterion text. State the fact you relied on and the conclusion you drew from it. Do not restate the criterion, do not hedge with phrases like \"it appears that\", and do not mention these instructions, the note's numbering, or your own reasoning process.\n\nThe criterion_id field must repeat the criterion identifier exactly as it was given to you, and kind must repeat whether the criterion was presented as an inclusion or an exclusion rule. Do not re-derive either field from the criterion text.\n",
+        "type": "text"
+      },
+      {
+        "cache_control": {
+          "ttl": "5m",
+          "type": "ephemeral"
+        },
+        "text": "1. A 58-year-old woman presented to the oncology clinic for evaluation of a newly diagnosed left breast mass.\n2. Core needle biopsy showed invasive ductal carcinoma, grade 2.\n3. Immunohistochemistry was reported as estrogen receptor positive at 90 percent, progesterone receptor positive at 60 percent, and HER2 negative by both IHC and FISH.\n4. Staging CT of the chest, abdomen and pelvis demonstrated three hepatic lesions consistent with metastatic disease.\n5. Bone scan was negative for osseous metastases.\n6. The patient has no prior systemic therapy for breast cancer.\n7. She underwent an appendectomy at age 24 and a cesarean section at age 31.\n8. Her past medical history includes well controlled type 2 diabetes mellitus and essential hypertension.\n9. Current medications are metformin 1000 mg twice daily, lisinopril 10 mg daily, and atorvastatin 20 mg daily.\n10. She has no known drug allergies.\n11. ECOG performance status is 1.\n12. Laboratory studies showed hemoglobin 11.8 g/dL, white blood cell count 6.2 thousand per microliter, and platelet count 231 thousand per microliter.\n13. Creatinine was 0.9 mg/dL with an estimated glomerular filtration rate above 60 mL/min per 1.73 square meters.\n14. Total bilirubin was 0.6 mg/dL, AST 28 U/L and ALT 31 U/L.\n15. Left ventricular ejection fraction by echocardiogram was 61 percent.\n16. The patient is postmenopausal, with her last menstrual period six years ago.\n17. She reports no history of thromboembolic disease and no active infection.\n18. She has never smoked and drinks alcohol socially.\n19. She lives independently and works full time as a schoolteacher.\n20. The patient is interested in clinical trial participation and asked to be considered for studies available at this center.",
+        "type": "text"
+      }
+    ],
+    "thinking": {
+      "type": "adaptive"
+    }
+  },
+  "request_id": "req_011CgqLLDUs1DosfXQbNyveC",
+  "response": {
+    "container": null,
+    "content": [
+      {
+        "citations": null,
+        "text": "{\"criterion_id\":\"INC-3\",\"kind\":\"inclusion\",\"label\":\"met\",\"evidence_sentence_ids\":[2,3,4],\"explanation\":\"Core needle biopsy confirmed invasive ductal carcinoma, with estrogen and progesterone receptor positivity and HER2 negative status by IHC and FISH. Staging CT shows hepatic lesions consistent with metastatic disease, so the criterion is satisfied.\"}",
+        "type": "text"
+      }
+    ],
+    "diagnostics": null,
+    "id": "msg_011CgqLLEEzu1LqHhwWaXtNm",
+    "model": "claude-haiku-5-5",
+    "role": "assistant",
+    "stop_details": null,
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "type": "message",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 2032
+      },
+      "cache_creation_input_tokens": 2032,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 90,
+      "output_tokens": 148,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "server_tool_use": null,
+      "service_tier": "standard",
+      "speed": "standard"
+    }
+  }
+}
