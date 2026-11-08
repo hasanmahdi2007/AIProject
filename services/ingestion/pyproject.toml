@@ -1,0 +1,18 @@
+[project]
+name = "ingestion"
+version = "0.1.0"
+description = "Beacon ingestion: TREC corpus to Postgres and Qdrant"
+requires-python = ">=3.12"
+dependencies = [
+    "beacon-core",
+    "qdrant-client>=1.12",
+    "fastembed>=0.5",
+    "ir-datasets>=0.5.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ingestion"]

@@ -1,0 +1,16 @@
+# Development is on Windows, CI runs Ubuntu. Normalise to LF in the repository
+# and on checkout so the two never disagree about line endings, which would
+# otherwise show up as a whole-file diff or a format-check failure.
+* text=auto eol=lf
+
+# PowerShell is happiest with CRLF.
+*.ps1 text eol=crlf
+
+# Never touch these.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.onnx binary
+*.parquet binary
+uv.lock -diff linguist-generated
