@@ -35,7 +35,12 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 class PostgresSettings(BaseModel):
     host: str = "localhost"
-    port: int = 5432
+    port: int = 15432
+    """Not 5432. The dev machine runs a native PostgreSQL 18 service on 5432, so
+    deploy/compose.yaml publishes 15432 instead and this default matches it - one
+    source of truth, no env override needed for a normal local run. Containers
+    still talk to each other on 5432 internally."""
+
     user: str = "beacon"
     password: SecretStr = SecretStr("beacon")
     database: str = "beacon"
@@ -49,7 +54,10 @@ class PostgresSettings(BaseModel):
 
 class RedisSettings(BaseModel):
     host: str = "localhost"
-    port: int = 6379
+    port: int = 16379
+    """Not 6379. Another compose project on the dev machine publishes its Redis
+    there; see PostgresSettings.port for the same reasoning."""
+
     db: int = 0
     conversation_ttl_seconds: int = 60 * 60 * 24
 

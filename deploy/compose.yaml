@@ -28,7 +28,10 @@ services:
       # Deterministic collation, so an ORDER BY does not depend on the host locale.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
-      - "5432:5432"
+      # Host port shifted off 5432: a native PostgreSQL 18 service owns that one
+      # on the dev machine. Container-internal stays 5432, so sibling containers
+      # (Phoenix) and the healthcheck are unaffected.
+      - "15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
@@ -65,7 +68,9 @@ services:
       - --dir
       - /data
     ports:
-      - "6379:6379"
+      # Host port shifted off 6379: another compose project on the dev machine
+      # publishes its own Redis there. Container-internal stays 6379.
+      - "16379:6379"
     volumes:
       - redis-data:/data
     healthcheck:

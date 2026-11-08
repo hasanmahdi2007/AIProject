@@ -54,6 +54,48 @@ jobs:
         run: uv run mypy .
 
       - name: Unit tests
-        # Integration tests need Docker and are marked; they run in their own
-        # job from Wave 1 onwards so this one stays fast.
+        # Integration tests need Docker and are marked; they run in the job
+        # below so this one stays fast.
         run: uv run pytest -m "not integration"
+
+  # Without this job the integration tests SKIP in CI rather than run, which
+  # reads as green while testing nothing - the same silent-pass failure mode as
+  # a conftest that never gets collected. Verified locally first: all five
+  # services healthy in 28s, 37 passed / 2 skipped.
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync from the lockfile
+        run: uv sync --locked
+
+      - name: Start the stack
+        # --wait blocks until every healthcheck passes, so a failure here is a
+        # genuinely unhealthy service rather than a race.
+        run: docker compose -f deploy/compose.yaml up -d --wait
+
+      - name: Migrate
+        run: uv run alembic upgrade head
+
+      - name: Integration tests
+        # Tests needing the TREC corpus (~2.6 GB) are guarded and skip here.
+        run: uv run pytest -m integration
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --tail=80
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f deploy/compose.yaml down -v

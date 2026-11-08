@@ -182,8 +182,8 @@ working around it.
 
 | Service | Image | Port | Healthcheck |
 |---|---|---|---|
-| postgres | `postgres:17` | 5432 | `pg_isready` |
-| redis | `redis:8` | 6379 | `redis-cli ping` |
+| postgres | `postgres:17` | **15432** on the host (5432 inside) | `pg_isready` + `SELECT 1` |
+| redis | `redis:8` | **16379** on the host (6379 inside) | `redis-cli ping` |
 | qdrant | `qdrant/qdrant` | 6333 | `/readyz` |
 | redpanda | `redpandadata/redpanda` | 9092 | `rpk cluster health` |
 | phoenix | `arizephoenix/phoenix` | 6006 | HTTP root |

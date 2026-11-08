@@ -51,17 +51,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = [
-    ".venv",
-    "alembic/versions",
-    # Moved here unmodified by W0 so git keeps their history. Agent A2 owns
-    # them, fixes the three defects (poisoned history, in-process dict,
-    # errors written into the response body) and DELETES these three lines
-    # together with the matching mypy exclusion below.
-    "services/gateway/src/gateway/main.py",
-    "services/gateway/src/gateway/router.py",
-    "services/gateway/src/gateway/service.py",
-]
+extend-exclude = [".venv", "alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "ASYNC", "RUF"]
@@ -97,13 +87,7 @@ warn_unused_ignores = true
 warn_unreachable = true
 no_implicit_optional = true
 strict_equality = true
-exclude = [
-    '^\.venv/',
-    '^alembic/versions/',
-    '^web/',
-    # See the matching ruff exclusion above: A2 owns these and removes this.
-    '^services/gateway/src/gateway/(main|router|service)\.py$',
-]
+exclude = ['^\.venv/', '^alembic/versions/', '^web/']
 mypy_path = [
     "libs/beacon-core/src",
     "libs/beacon-llm/src",
