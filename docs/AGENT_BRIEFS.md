@@ -22,6 +22,7 @@ into a new agent, and review the resulting PR against its *Definition of Done*. 
 | **Shared files are orchestrator-owned** | `uv.lock`, root `pyproject.toml`, `alembic/versions/**`, `.github/workflows/ci.yml`. An agent that needs a dependency or a migration **requests it in its PR description**; it does not edit those files. |
 | **No scope creep** | An agent that believes it needs to touch another agent's path stops and reports instead of doing it. |
 | **Every PR must be green** | `ruff check`, `ruff format --check`, `mypy`, `pytest` all pass before review. |
+| **No `conftest.py` inside a package's test directory** | The repo has exactly one, at `tests/conftest.py`. A second one anywhere (e.g. `services/gateway/tests/conftest.py`) makes `mypy .` fail with *"Duplicate module named conftest"*, because both resolve to the bare module name `conftest`. Adding `__init__.py` trades that for a pytest failure (*"Plugin already registered under a different name"*), and the real fixes — `explicit_package_bases` for mypy, `consider_namespace_packages` for pytest — cannot work through a hyphenated directory like `libs/beacon-llm/`. **So: put shared test material in a uniquely-named module inside your own package** (A3's `beacon_llm/_testing.py` is the reference) and import it from your tests. Found by A3, 8 Nov. |
 
 ### Dependency graph and critical path
 
