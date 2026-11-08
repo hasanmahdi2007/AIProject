@@ -68,7 +68,7 @@ flowchart LR
     W -.->|"checkpoint per node"| PG
     W -.->|"progress"| K
     K -.-> G
-    G <-.->|"chan:match:{id}"| RD
+    G <-.->|"chan:match:ID pub/sub"| RD
     G -.->|"SSE"| B
     G --- PX
     W --- PX
