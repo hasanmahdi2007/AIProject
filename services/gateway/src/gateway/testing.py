@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 from typing import Any, Self
 
 __all__ = [
+    "INTEGRATION_HINT",
     "FakeAnthropic",
     "FakeFinalMessage",
     "FakeMessages",
