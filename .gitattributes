@@ -13,4 +13,6 @@
 *.ico binary
 *.onnx binary
 *.parquet binary
-uv.lock -diff linguist-generated
+# Collapsed in GitHub diffs, but still diffable locally: -diff would make git
+# report a 1 MB lockfile as a binary blob during review.
+uv.lock linguist-generated
