@@ -38,3 +38,6 @@ web/out/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code session state and agent worktrees - never committed.
+.claude/
