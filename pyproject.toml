@@ -119,10 +119,15 @@ module = ["ir_datasets.*", "ranx.*", "fastembed.*", "textstat.*", "aiokafka.*", 
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# No testpaths: each agent owns its own package, so its tests live beside its
+# code (services/gateway/tests, libs/beacon-llm/tests, ...). Pinning testpaths
+# to tests/ would collect none of them and CI would pass while testing nothing.
+# importlib import mode is what lets two packages each have a tests/test_main.py
+# without pytest raising an import-file-mismatch.
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers --import-mode=importlib"
+norecursedirs = [".venv", ".git", "web", "node_modules", "alembic", "__pycache__", "*.egg-info"]
 markers = [
     "integration: needs Docker (testcontainers); excluded from the fast unit run",
 ]
