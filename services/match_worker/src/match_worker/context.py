@@ -72,7 +72,20 @@ def to_config(
         CONTEXT_KEY: ctx,
         **(extra or {}),
     }
-    return {"configurable": configurable, "recursion_limit": 64}
+    return {
+        "configurable": configurable,
+        "recursion_limit": 64,
+        # LangGraph's async executor turns this into a semaphore over the tasks
+        # of one superstep, which is the only thing that actually limits the
+        # fan-out: twenty ``Send`` tasks are otherwise all scheduled at once.
+        # That matters for money, not just for load. The twenty rule checks
+        # share a cached prompt prefix, and the first call is the one that
+        # *writes* it - fire all twenty simultaneously and they all miss the
+        # cache that none of them has written yet, so the run pays full input
+        # price twenty times instead of once. Nothing fails; it just costs ten
+        # times more. ``WorkerConfig.fanout_concurrency`` is deliberately small.
+        "max_concurrency": ctx.worker.fanout_concurrency,
+    }
 
 
 def context_from(config: RunnableConfig) -> RunContext:

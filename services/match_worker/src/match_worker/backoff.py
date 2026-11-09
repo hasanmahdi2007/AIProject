@@ -21,6 +21,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import anthropic
+import httpx
 
 from beacon_core.logging import get_logger
 from beacon_llm import PromptTooLargeError, RefusalError, StructuredOutputError
@@ -42,8 +43,14 @@ def is_retryable(exc: BaseException) -> bool:
         return True
     if isinstance(exc, anthropic.APIStatusError):
         return exc.status_code == 408 or exc.status_code == 429 or exc.status_code >= 500
+    # httpx errors reach here from the retrieval client and from test doubles
+    # that stand in for the transport; both are blips by definition.
     return isinstance(
-        exc, anthropic.APIConnectionError | anthropic.APITimeoutError | asyncio.TimeoutError
+        exc,
+        anthropic.APIConnectionError
+        | anthropic.APITimeoutError
+        | asyncio.TimeoutError
+        | httpx.TransportError,
     )
 
 

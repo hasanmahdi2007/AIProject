@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import anthropic
 import httpx
 from anthropic.types import Message, Usage
 from pydantic import BaseModel
@@ -50,6 +49,7 @@ from beacon_core.schemas import (
     PipelineStep,
     RankedQuery,
     SearchResponse,
+    Sex,
     TrialCandidate,
 )
 from beacon_core.settings import Settings
@@ -118,7 +118,7 @@ class TrialFixture:
     conditions: tuple[str, ...] = ()
     min_age_years: float | None = None
     max_age_years: float | None = None
-    sex: str | None = None
+    sex: Sex | None = None
 
     @property
     def criteria(self) -> list[ParsedCriterion]:
@@ -213,7 +213,7 @@ def candidates_for(trials: Sequence[TrialFixture] = TRIALS) -> list[TrialCandida
             conditions=list(trial.conditions),
             min_age_years=trial.min_age_years,
             max_age_years=trial.max_age_years,
-            sex=trial.sex,  # type: ignore[arg-type]
+            sex=trial.sex,
             rrf_score=1.0 / (index + 1),
             rerank_score=1.0 - index / 10,
             retrieval_rank=index + 1,
@@ -491,10 +491,10 @@ class FlakyClient:
     """A real replay client that fails the calls a test wants failed.
 
     Used for the "one trial fails twice, the other nineteen finish" case. The
-    failure is an ``APIConnectionError`` because that is what
-    :func:`match_worker.backoff.is_retryable` treats as transport - so the
-    trial really does get retried and really does run out of attempts, rather
-    than being rejected once on a non-retryable error.
+    failure is a transport error because that is what
+    :func:`match_worker.backoff.is_retryable` retries - so the trial really
+    does get retried and really does run out of attempts, rather than being
+    rejected once on a non-retryable error.
     """
 
     inner: SupportsCall
@@ -515,9 +515,10 @@ class FlakyClient:
             if needle in prompt.variable and remaining > 0:
                 self.fail_when_variable_contains[needle] = remaining - 1
                 self.attempts.append(needle)
-                raise anthropic.APIConnectionError(
-                    request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-                )
+                # A transport error, not an API outcome: this is what
+                # match_worker.backoff.is_retryable treats as worth retrying,
+                # so the trial really does burn its attempts.
+                raise httpx.ConnectError("stub transport failure (match_worker._testing)")
         return await self.inner.call(
             prompt=prompt,
             output_model=output_model,
@@ -734,16 +735,14 @@ class InMemoryStore:
             self.judgments[key] = {**self.judgments.get(key, {}), **row}
 
     async def record_llm_call(self, row: dict[str, Any]) -> None:
+        """Append-only, deliberately - see ``PostgresStore.record_llm_call``.
+
+        Every other write in this double deduplicates, because its real
+        counterpart has a unique constraint. This one does not: the audit log
+        must show one row per call actually billed, so a second row is either
+        real spend or a checkpointing defect, and both need to be visible.
+        """
         self._count("record_llm_call")
-        identity = (row.get("match_run_id"), row["prompt_hash"], row.get("step"))
-        for existing in self.llm_calls:
-            if (
-                existing.get("match_run_id"),
-                existing["prompt_hash"],
-                existing.get("step"),
-            ) == identity:
-                self.conflicts["llm_calls"] = self.conflicts.get("llm_calls", 0) + 1
-                return
         self.llm_calls.append(row)
 
     # --------------------------------------------------------- relay source --

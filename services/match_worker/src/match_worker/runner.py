@@ -438,7 +438,11 @@ async def run_worker(
 
     cfg = settings or get_settings()
     worker_cfg = worker or WorkerConfig()
-    store = PostgresStore(sessionmaker=get_sessionmaker(cfg))
+    # get_sessionmaker() is lru_cached on its argument and Settings is a
+    # pydantic model, so passing one raises "unhashable type: 'Settings'".
+    # Called with no argument it reads the process-wide get_settings(), which
+    # is the same object this entry point is already using.
+    store = PostgresStore(sessionmaker=get_sessionmaker())
 
     if checkpointer is not None:
         instance = MatchWorker(

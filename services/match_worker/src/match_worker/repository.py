@@ -31,13 +31,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, func, select
+from sqlalchemy.dialects.postgresql import Insert as PgInsert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.sql.dml import Insert
 
 from beacon_core.logging import get_logger
 from beacon_core.models import (
@@ -122,13 +122,20 @@ class MatchStore(Protocol):
     async def count_rows(self, match_id: str) -> dict[str, int]: ...
 
 
-def _insert_for(session: AsyncSession, table: Any) -> Insert:
-    """``INSERT ... ON CONFLICT`` for whichever dialect this session speaks."""
+def _insert_for(session: AsyncSession, table: Any) -> PgInsert:
+    """``INSERT ... ON CONFLICT`` for whichever dialect this session speaks.
+
+    Typed as the Postgres construct because that is the one that runs in
+    production and the only one whose ``on_conflict_*`` methods mypy knows.
+    SQLite's construct carries the same two methods with the same signatures -
+    it is accepted here so that a unit test can exercise the real constraint
+    behaviour without Docker - and the cast says exactly that and no more.
+    """
     name = session.get_bind().dialect.name
     if name == "postgresql":
         return pg_insert(table)
     if name == "sqlite":
-        return sqlite_insert(table)
+        return cast("PgInsert", sqlite_insert(table))
     raise RuntimeError(f"no idempotent insert implemented for dialect {name!r}")
 
 
@@ -166,7 +173,7 @@ class PostgresStore:
             patient_id=row.patient_id,
             patient_note=row.note_text or "",
             config_version=row.config_version,
-            status=row.status,  # type: ignore[arg-type]
+            status=cast("MatchStatus", row.status),
         )
 
     async def mark_running(self, match_id: str, *, step: PipelineStep | None = None) -> None:
@@ -240,7 +247,9 @@ class PostgresStore:
                 .on_conflict_do_nothing(index_elements=["event_id"])
             )
             result = await session.execute(statement)
-        return bool(result.rowcount)
+        # rowcount is 0 when the event was already queued, which is the whole
+        # point: the caller learns "already there" without a second query.
+        return bool(cast("CursorResult[Any]", result).rowcount)
 
     async def save_patient_profile(
         self, patient_id: str | None, *, sentences: list[dict[str, Any]], profile: dict[str, Any]
@@ -376,26 +385,26 @@ class PostgresStore:
     async def record_llm_call(self, row: dict[str, Any]) -> None:
         """Append to the audit log, once per distinct prompt per run.
 
-        ``llm_calls`` has no unique constraint - it is an append-only log and
-        a legitimate re-ask of the same question is a second row. But a
-        *resumed* run re-runs a node and would double-count its cost, so the
-        insert is guarded on ``(match_run_id, prompt_hash, step)``, which is
-        the same identity the fixture key uses. Requested in the PR: a real
-        ``uq_llm_calls_run_prompt_step`` constraint, which would make this an
-        upsert and remove the (single-writer-per-match) race.
+        **This is the one write in the worker that is deliberately not
+        deduplicated**, and the exception is the point rather than an oversight.
+        Every cost and latency figure in the README is a query against this
+        table, and the invariant that makes those figures defensible is *one row
+        per call actually billed*. So:
+
+        * if a resumed run really did re-issue a prompt, we were billed twice
+          and the log has to show two rows - collapsing them would under-report
+          real spend, which is the one direction of error that matters;
+        * if a prompt is logged twice without having been re-issued, that is a
+          checkpointing defect, and a unique constraint would hide it behind a
+          silent no-op instead of showing it.
+
+        "What did this run cost the user, counting a retried call once?" is a
+        real question, but it is a *read-time* one - ``DISTINCT ON
+        (prompt_hash)`` in the eval query answers it without having thrown the
+        rows away. Collapsing at read time is free; losing rows at write time
+        is irreversible.
         """
         async with self.sessionmaker.begin() as session:
-            existing = (
-                await session.execute(
-                    select(LlmCall.id)
-                    .where(LlmCall.match_run_id == row.get("match_run_id"))
-                    .where(LlmCall.prompt_hash == row["prompt_hash"])
-                    .where(LlmCall.step == row.get("step"))
-                    .limit(1)
-                )
-            ).first()
-            if existing is not None:
-                return
             session.add(LlmCall(**row))
 
     async def count_rows(self, match_id: str) -> dict[str, int]:

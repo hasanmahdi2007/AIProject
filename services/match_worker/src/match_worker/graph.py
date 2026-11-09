@@ -38,6 +38,8 @@ from contextlib import asynccontextmanager
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.base import SerializerProtocol
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -55,9 +57,41 @@ from match_worker.nodes import (
 )
 from match_worker.state import GraphState
 
-__all__ = ["build_graph", "checkpointer_dsn", "compile_graph", "postgres_checkpointer"]
+__all__ = [
+    "CHECKPOINT_TYPES",
+    "build_graph",
+    "build_serde",
+    "checkpointer_dsn",
+    "compile_graph",
+    "postgres_checkpointer",
+]
 
 log = get_logger(__name__)
+
+CHECKPOINT_TYPES: tuple[tuple[str, str], ...] = (
+    ("beacon_core.schemas", "NoteSentence"),
+    ("beacon_core.schemas", "NumberedNote"),
+    ("beacon_core.schemas", "PatientProfile"),
+    ("beacon_core.schemas", "RankedQuery"),
+    ("beacon_core.schemas", "TrialCandidate"),
+    ("beacon_core.schemas", "CriterionJudgment"),
+    ("beacon_core.schemas", "TrialJudgment"),
+    ("beacon_core.schemas", "RankedTrial"),
+)
+"""Every ``beacon_core`` model that reaches a checkpoint, named explicitly.
+
+The checkpointer's serialiser reconstructs arbitrary classes by module path on
+read, which is a code-execution path for anyone who can write to the
+checkpoint table - so LangGraph warns on an unregistered type and will refuse
+one in a later version. Listing the eight state models turns that warning into
+a decision: these are the types a match's state is made of, and a new one has
+to be added here deliberately.
+"""
+
+
+def build_serde() -> SerializerProtocol:
+    """The checkpoint serialiser, restricted to the types above."""
+    return JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
 
 
 def build_graph() -> StateGraph[GraphState, None, GraphState, GraphState]:
@@ -68,7 +102,10 @@ def build_graph() -> StateGraph[GraphState, None, GraphState, GraphState]:
     graph.add_node("generate_queries", generate_queries)
     graph.add_node("retrieve", retrieve)
     graph.add_node("parse_rules", parse_rules)
-    graph.add_node("check_rules", check_rules)
+    # ``check_rules`` is a Send target: it is handed a TrialTask payload, not
+    # the run's state, so its signature cannot be the state type the rest of
+    # the nodes share. The ignore marks that deliberate difference.
+    graph.add_node("check_rules", check_rules)  # type: ignore[arg-type]
     graph.add_node("verify", verify)
     graph.add_node("rank_and_explain", rank_and_explain)
 
@@ -96,7 +133,7 @@ def compile_graph(
     - which is the whole distinction the crash test exists to demonstrate, so
     the integration tests pass a real Postgres saver explicitly.
     """
-    return build_graph().compile(checkpointer=checkpointer or InMemorySaver())
+    return build_graph().compile(checkpointer=checkpointer or InMemorySaver(serde=build_serde()))
 
 
 def checkpointer_dsn(settings: Settings | None = None) -> str:
@@ -125,7 +162,7 @@ async def postgres_checkpointer(
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     dsn = checkpointer_dsn(settings)
-    async with AsyncPostgresSaver.from_conn_string(dsn) as saver:
+    async with AsyncPostgresSaver.from_conn_string(dsn, serde=build_serde()) as saver:
         if setup:
             await saver.setup()
         log.info("worker.checkpointer.ready", backend="postgres")

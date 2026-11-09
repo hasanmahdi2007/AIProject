@@ -32,7 +32,7 @@ of doubling them.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Send
@@ -40,6 +40,7 @@ from langgraph.types import Send
 from beacon_core.logging import get_logger
 from beacon_core.schemas import (
     CriterionJudgment,
+    CriterionKind,
     NumberedNote,
     PatientProfile,
     RankedQuery,
@@ -74,7 +75,6 @@ from match_worker.state import (
     GraphState,
     TrialTask,
     could_not_evaluate,
-    is_partial,
     merge_judgments,
     partial_reasons,
 )
@@ -371,7 +371,7 @@ async def parse_rules(state: GraphState, config: RunnableConfig) -> dict[str, An
     return {"current_step": "parse_rules", "judgments": unparseable}
 
 
-def fan_out_trials(state: GraphState, config: RunnableConfig) -> list[Send]:
+def fan_out_trials(state: GraphState, config: RunnableConfig) -> list[Send] | list[str]:
     """One parallel ``check_rules`` task per candidate trial.
 
     ``Send`` rather than a loop inside one node, because the fan-out is what
@@ -387,7 +387,7 @@ def fan_out_trials(state: GraphState, config: RunnableConfig) -> list[Send]:
     """
     ctx = context_from(config)
     if _halted(state):
-        return []
+        return ["verify"]
     judged = {judgment.nct_id for judgment in state.judgments}
     note = _note_of(state)
     sends: list[Send] = []
@@ -409,7 +409,11 @@ def fan_out_trials(state: GraphState, config: RunnableConfig) -> list[Send]:
             )
         )
     log.info("worker.node.fan_out", match_id=ctx.match_id, tasks=len(sends), skipped=len(judged))
-    return sends
+    # An empty fan-out must still reach the rest of the pipeline. Returning []
+    # from a conditional edge schedules nothing at all, which would end the run
+    # with no verdicts written - exactly the case a resumed run hits when every
+    # trial was already judged before the crash.
+    return sends or ["verify"]
 
 
 # ----------------------------------------------------------- 5. check_rules --
@@ -432,6 +436,10 @@ async def check_rules(payload: dict[str, Any], config: RunnableConfig) -> dict[s
     ctx = context_from(config)
     task = TrialTask.model_validate(payload)
     note = task.note
+    # One progress event for the whole fan-out, not one per trial: the event ID
+    # is derived from (match_id, node), so all twenty tasks write the same ID
+    # and nineteen of them hit the outbox's unique constraint and do nothing.
+    await _announce(ctx, "check_rules", "judging eligibility rules")
 
     criteria = task.criteria
     if not criteria:
@@ -496,7 +504,7 @@ async def check_rules(payload: dict[str, Any], config: RunnableConfig) -> dict[s
             aligned.append(
                 CriterionJudgment(
                     criterion_id=criterion_id,
-                    kind=criterion["kind"],  # type: ignore[arg-type]
+                    kind=cast("CriterionKind", criterion["kind"]),
                     label="insufficient_info",
                     evidence_sentence_ids=[],
                     explanation="No judgment was returned for this criterion.",
@@ -816,10 +824,3 @@ async def rank_and_explain(state: GraphState, config: RunnableConfig) -> dict[st
         "error": error,
         "total_cost_usd": spend,
     }
-
-
-def run_is_partial(state: GraphState) -> bool:
-    """Whether the finished run's answer is incomplete but usable."""
-    return bool(state.error and state.error.startswith(PARTIAL_PREFIX)) or is_partial(
-        state.judgments
-    )

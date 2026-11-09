@@ -59,9 +59,19 @@ class WorkerConfig(BaseSettings):
 
     # -------------------------------------------------------------- limits --
     fanout_concurrency: int = Field(default=5, ge=1)
-    """Simultaneous in-flight Claude calls per node. Kept modest: the first
-    call writes the shared prefix to cache and the rest read it, so firing all
-    twenty at once races the cache write and pays full price twenty times."""
+    """Simultaneous in-flight Claude calls.
+
+    Kept modest for a reason that costs money rather than time: the twenty rule
+    checks share a cached prompt prefix, and the *first* call is the one that
+    writes it. Fire all twenty at once and every one of them misses a cache
+    none of them has written yet, so the run pays full input price twenty times
+    instead of once. Nothing errors; the bill is simply ten times larger.
+
+    Applied in two places, because they are two different mechanisms:
+    ``context.to_config`` passes it to LangGraph as ``max_concurrency``, which
+    limits the parallel ``Send`` tasks of the fan-out, and the ``verify`` node
+    holds its own semaphore over the calls it makes inside one node, where
+    LangGraph's limit does not reach."""
 
     throttle_seconds: float = Field(default=0.0, ge=0)
     """Pause before each Claude call. A crude client-side rate limiter for a

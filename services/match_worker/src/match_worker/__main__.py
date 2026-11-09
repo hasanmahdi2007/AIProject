@@ -8,10 +8,10 @@ local run needs no overrides.
 from __future__ import annotations
 
 import argparse
-import asyncio
 
 from beacon_core.logging import configure_logging, get_logger
 from beacon_core.settings import get_settings
+from match_worker.compat import run as run_async
 from match_worker.config import WorkerConfig
 from match_worker.runner import run_worker
 
@@ -45,7 +45,7 @@ def main() -> int:
         worker = worker.model_copy(update={"max_cost_usd": args.max_cost_usd})
 
     try:
-        handled = asyncio.run(
+        handled = run_async(
             run_worker(settings=settings, worker=worker, max_messages=args.max_messages)
         )
     except KeyboardInterrupt:
