@@ -109,6 +109,7 @@ AGE_FILTER_CENSUS: Final[dict[str, str]] = {
     "max_age_years_null": "49.8%",
     "min_age_years_null": "9.6%",
     "dense_truncation_rate": "2.350% (3,056 of 130,024)",
+    "criteria_unstructured_split_rate": "12.9% (21,308 of 164,602)",
 }
 """Measured facts about the indexed trials, counted in Postgres by the
 orchestrator on 2026-11-09 over the 130,024 trials indexed at that point.
@@ -121,6 +122,12 @@ bounded by the half of the corpus where the bound is known at all. That is why
 the ``+ age/sex filters`` row is allowed to come out flat or negative, and why
 that result would be a finding about ClinicalTrials.gov metadata rather than a
 bug in the filter.
+
+``criteria_unstructured_split_rate`` matters to the ``+ LLM rule matching`` row
+for the same kind of reason: one criterion row in eight was split out of free
+text by a regex rather than from a structured list, so the rule checker's input
+is measurably noisier on that eighth. A rule-matching row that improves less
+than expected should be read against this number before the prompt is blamed.
 
 Counted over the partial index, so treat them as representative rather than
 final.
