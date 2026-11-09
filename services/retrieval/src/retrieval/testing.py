@@ -786,7 +786,14 @@ def stub_collection_info(
         optimizer_status=models.OptimizersStatusOneOf.OK,
         points_count=points,
         segments_count=1,
-        config=models.CollectionConfig.model_construct(params=params),
+        # pydantic's mypy plugin types ``model_construct`` with the model's
+        # required fields, which defeats the point of it: skipping
+        # validation is exactly why it is being used here, so that a
+        # 30-line HnswConfig the verifier never reads does not have to be
+        # invented.
+        config=models.CollectionConfig.model_construct(  # type: ignore[call-arg]
+            params=params
+        ),
         payload_schema={
             name: models.PayloadIndexInfo.model_construct(
                 data_type=models.PayloadSchemaType.FLOAT, points=points

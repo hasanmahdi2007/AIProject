@@ -5,7 +5,7 @@
 runner with a cold FastEmbed cache. :func:`retrieval.testing.missing_models`
 inspects the cache directory instead of trying to load the model, because
 attempting the load *is* the download. Everything that can be tested without
-weights lives in ``test_integration_qdrant.py``, which does run in CI - the
+weights lives in ``test_retrieval_integration_qdrant.py``, which does run in CI - the
 overfiltering and NULL-safety tests among them.
 
 Nothing here calls a paid API. All three models are local and free; this service

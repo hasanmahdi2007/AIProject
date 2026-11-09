@@ -8,7 +8,7 @@ only reason a sparse index is in this system next to a dense one.
 
 These run against a stub, which is why they can cover the failure cases at all -
 a live Qdrant would have to be deliberately misconfigured four different ways.
-``test_integration_qdrant.py`` separately asserts the real collection passes.
+``test_retrieval_integration_qdrant.py`` separately asserts the real collection passes.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ class TestMissingCollection:
     async def test_the_message_names_the_ingest_command(self) -> None:
         client = StubQdrantClient(exists=False)
 
-        with pytest.raises(CollectionVerificationError, match="ingestion.run"):
+        with pytest.raises(CollectionVerificationError, match=r"ingestion\.run"):
             await verify_collection(client, qdrant_settings().qdrant)
 
 

@@ -28,12 +28,12 @@ from retrieval.testing import (
     StubSparseEncoder,
 )
 
-# The hand-computed case from test_fusion, now driven through the service:
+# The hand-computed case from test_retrieval_fusion, now driven through the service:
 # one query, dense = [A, B, C], sparse = [C, A, D] -> A, C, B, D, with the
 # letters spelled NCTA..NCTD because the contract requires >= 3 characters.
 ONE_QUERY_BRANCHES = [["NCTA", "NCTB", "NCTC"], ["NCTC", "NCTA", "NCTD"]]
 
-PAYLOADS = {
+PAYLOADS: dict[str, dict[str, Any]] = {
     "NCTA": {
         "nct_id": "NCTA",
         "min_age_years": 18.0,
@@ -145,7 +145,7 @@ class TestFilterReachesEverySearch:
                 "a branch searched without the filter contributes ineligible "
                 "trials that are indistinguishable from eligible ones"
             )
-            assert request.filter.must is not None
+            assert isinstance(request.filter.must, list)
             assert len(request.filter.must) == 3
 
     async def test_every_branch_of_every_query_carries_it(self) -> None:
@@ -270,7 +270,7 @@ class TestRerank:
 
         response = await service.search(one_query(use_rerank=True))
 
-        assert [c.nct_id for c in response.candidates][0] == "NCTD"
+        assert response.candidates[0].nct_id == "NCTD"
         assert response.candidates[0].rerank_score == 9.0
 
     async def test_it_sees_the_whole_fused_set_not_just_the_answer(self) -> None:

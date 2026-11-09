@@ -5,7 +5,7 @@ handed to Qdrant: that every positive condition is OR-ed with the two
 "no value here" conditions, that ``must_not`` is never used, that the bounds are
 inclusive. They cannot prove Qdrant then *interprets* that shape as intended -
 only Qdrant can say that, and
-``test_integration_qdrant.py::TestNullSafety`` asserts it against a live engine
+``test_retrieval_integration_qdrant.py::TestNullSafety`` asserts it against a live engine
 with a real NULL-age point. Both halves are necessary: the structural test
 catches a wrong filter being built, the integration test catches a correct
 filter being understood differently than assumed.

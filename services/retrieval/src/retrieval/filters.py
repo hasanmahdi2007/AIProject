@@ -35,7 +35,7 @@ array - and which one applies depends on whether the writer stored the key with
 a null value or omitted it. B1 currently writes the key explicitly as ``None``,
 but that is B1's choice to change, not a thing this service should depend on.
 Listing both costs one extra disjunct and makes the filter correct either way.
-``services/retrieval/tests/test_integration_qdrant.py`` asserts the NULL case
+``services/retrieval/tests/test_retrieval_integration_qdrant.py`` asserts the NULL case
 against a live Qdrant rather than trusting this reasoning.
 
 What is allowed to be a filter at all: cheap, exact, structured facts. Age, sex,
