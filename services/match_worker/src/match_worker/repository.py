@@ -422,7 +422,12 @@ class PostgresStore:
         ]
 
     async def record_llm_call(self, row: dict[str, Any]) -> None:
-        """Append to the audit log, once per distinct prompt per run.
+        """Append to the audit log: one row per call actually billed.
+
+        Not one row per distinct prompt. A transport-level retry inside a node
+        can legitimately issue the same prompt twice, and both requests were
+        paid for, so both get a row - do not write a cost query that treats
+        ``prompt_hash`` as unique.
 
         **This is the one write in the worker that is deliberately not
         deduplicated**, and the exception is the point rather than an oversight.
