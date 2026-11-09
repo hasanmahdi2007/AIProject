@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+@layer utilities {
+  /* The evidence highlight. Deliberately loud: the point of this console is
+     that a reader can see, at a glance, which sentence a rule was decided on. */
+  .evidence-on {
+    @apply bg-amber-200 ring-2 ring-amber-500 ring-offset-1 ring-offset-white;
+  }
+}
