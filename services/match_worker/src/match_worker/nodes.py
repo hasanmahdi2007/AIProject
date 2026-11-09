@@ -452,6 +452,30 @@ async def check_rules(payload: dict[str, Any], config: RunnableConfig) -> dict[s
     if not criteria:
         return {"judgments": [could_not_evaluate(task.nct_id, "no parsed rules for this trial")]}
 
+    # Already judged by an earlier attempt? Then the answer is in Postgres and
+    # re-asking Claude would be paying twice for it. This is the durable half of
+    # idempotency: the checkpoint can lose a finished task's write when the
+    # process is killed outright, but the rows it committed are still there.
+    already = await ctx.store.load_judgments(task.match_id, task.nct_id)
+    if already and {row["criterion_id"] for row in already} >= {
+        criterion["criterion_id"] for criterion in criteria
+    }:
+        by_criterion = {row["criterion_id"]: row for row in already}
+        restored = [
+            CriterionJudgment.model_validate(by_criterion[criterion["criterion_id"]])
+            for criterion in criteria
+        ]
+        log.info(
+            "worker.node.check_rules.restored",
+            match_id=task.match_id,
+            nct_id=task.nct_id,
+            rules=len(restored),
+            detail="judgments already in Postgres from an earlier attempt; no Claude call",
+        )
+        return {
+            "judgments": [derive_trial_judgment(nct_id=task.nct_id, judgments=restored, note=note)]
+        }
+
     prompt = build_cached_prompt(
         instructions=rule_check_instructions(),
         note=note,

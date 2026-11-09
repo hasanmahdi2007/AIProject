@@ -118,6 +118,7 @@ class MatchStore(Protocol):
     async def save_judgments(
         self, match_id: str, nct_id: str, rows: Sequence[dict[str, Any]]
     ) -> None: ...
+    async def load_judgments(self, match_id: str, nct_id: str) -> list[dict[str, Any]]: ...
     async def record_llm_call(self, row: dict[str, Any]) -> None: ...
     async def count_rows(self, match_id: str) -> dict[str, int]: ...
 
@@ -381,6 +382,44 @@ class PostgresStore:
                     index_elements=["match_run_id", "nct_id", "criterion_id"], set_=updatable
                 )
             )
+
+    async def load_judgments(self, match_id: str, nct_id: str) -> list[dict[str, Any]]:
+        """This trial's judgments, if some earlier attempt already wrote them.
+
+        The durable answer to "has this trial been judged?". It is asked before
+        every rule check, and it is what makes a crash cost nothing the second
+        time around: a ``Send`` task that committed its rows and then died
+        before its checkpoint write is indistinguishable, to LangGraph, from
+        one that never ran - so without this read the resumed run re-issues a
+        prompt that has already been paid for.
+
+        All of a trial's rows are written in one transaction, so finding any of
+        them means the trial was judged completely.
+        """
+        async with self.sessionmaker() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        CriterionJudgmentRow.criterion_id,
+                        CriterionJudgmentRow.kind,
+                        CriterionJudgmentRow.label,
+                        CriterionJudgmentRow.evidence_sentence_ids,
+                        CriterionJudgmentRow.explanation,
+                    )
+                    .where(CriterionJudgmentRow.match_run_id == match_id)
+                    .where(CriterionJudgmentRow.nct_id == nct_id)
+                )
+            ).all()
+        return [
+            {
+                "criterion_id": row.criterion_id,
+                "kind": row.kind,
+                "label": row.label,
+                "evidence_sentence_ids": list(row.evidence_sentence_ids or []),
+                "explanation": row.explanation or "",
+            }
+            for row in rows
+        ]
 
     async def record_llm_call(self, row: dict[str, Any]) -> None:
         """Append to the audit log, once per distinct prompt per run.

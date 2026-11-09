@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -58,6 +59,17 @@ def _connect() -> psycopg.Connection[Any]:
     return psycopg.connect(_dsn(), connect_timeout=5)
 
 
+def _free_port() -> int:
+    """A port the stub retrieval server can bind.
+
+    Asked for rather than hardcoded, because CI runs several jobs on one host
+    and a fixed port is a flake waiting for a neighbour.
+    """
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
 def _one(cursor: psycopg.Cursor[Any]) -> tuple[Any, ...]:
     """``fetchone()`` that cannot be ``None``: every query here is an aggregate
     or a primary-key lookup whose row the test has just inserted."""
@@ -68,11 +80,30 @@ def _one(cursor: psycopg.Cursor[Any]) -> tuple[Any, ...]:
 
 @pytest.fixture(scope="module")
 def postgres() -> Iterator[psycopg.Connection[Any]]:
+    """A connection to the compose stack's Postgres, or a skip.
+
+    Skip rather than fail: CI runs ``pytest -m integration`` in a job that has
+    the stack up, but the same test must be collectable on a laptop with
+    Docker off. A test that hard-fails when its environment is absent turns
+    "not run here" into "broken", which is how an unrelated PR goes red.
+
+    Note what this fixture is *not*: it is a synchronous psycopg connection,
+    and both tests in this module are synchronous. The worker under test runs
+    in child processes with their own event loops, so nothing here shares an
+    asyncpg pool across the per-function event loops that
+    ``asyncio_default_fixture_loop_scope = "function"`` creates - the
+    "Future attached to a different loop" failure cannot arise.
+    """
     try:
         connection = _connect()
     except psycopg.OperationalError as exc:  # pragma: no cover - environment
         pytest.skip(f"Postgres is not reachable at {_dsn().rsplit('@', 1)[-1]}: {exc}")
     connection.autocommit = True
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass('public.match_runs')")
+        if _one(cursor)[0] is None:
+            connection.close()
+            pytest.skip("Beacon schema is absent; run 'alembic upgrade head' first")
     yield connection
     connection.close()
 
@@ -198,6 +229,20 @@ def _checkpoint_state(connection: psycopg.Connection[Any]) -> dict[str, Any]:
     }
 
 
+def _calls_by_step(connection: psycopg.Connection[Any]) -> dict[str, int]:
+    """``llm_calls`` for this match, grouped by pipeline step.
+
+    The audit log is deliberately not deduplicated, so this is the one view
+    that shows whether a resumed run re-issued a prompt it did not need to.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT step, count(*) FROM llm_calls WHERE match_run_id = %s GROUP BY step",
+            (MATCH_ID,),
+        )
+        return {str(step): int(count) for step, count in cursor.fetchall()}
+
+
 def _spawn(fixtures: Path, port: int, log: Path) -> subprocess.Popen[bytes]:
     env = {
         **os.environ,
@@ -256,7 +301,7 @@ def test_a_killed_worker_resumes_from_its_checkpoint_without_duplicating_rows(
 ) -> None:
     seed_pipeline_fixtures(tmp_path, verify=False)
     _seed(postgres)
-    port = 8731
+    port = _free_port()
 
     # --- 1. start the run and kill it mid-fan-out ------------------------
     first_log = tmp_path / "child-1.log"
@@ -320,6 +365,32 @@ def test_a_killed_worker_resumes_from_its_checkpoint_without_duplicating_rows(
     # trials that had not finished were judged exactly once.
     assert final["criterion_judgments"] > after_kill["criterion_judgments"]
 
+    # The resumed run restarted at the fan-out, not at step 1. Asserted against
+    # the audit log, which is the only place that would show a re-issued call:
+    # exactly one profile_patient and one generate_queries for the whole match,
+    # across both processes.
+    calls = _calls_by_step(postgres)
+    print(json.dumps({"llm_calls_by_step": calls}, indent=2, default=str))
+    assert calls.get("profile_patient") == 1, "the resumed run re-profiled the patient"
+    assert calls.get("generate_queries") == 1, "the resumed run re-generated the queries"
+    # And the crash re-billed nothing. A Send task that committed its rows and
+    # then died before its checkpoint write *is* re-run - LangGraph has no
+    # record that it finished - but check_rules asks Postgres before it asks
+    # Claude, so the re-run restores the judgment instead of buying it again.
+    # One call per trial, and no prompt billed twice.
+    assert calls.get("check_rules") == len(TRIALS), (
+        "a resumed trial re-issued its prompt; the Postgres-backed skip in "
+        "check_rules is not working"
+    )
+    with postgres.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) FROM (SELECT prompt_hash FROM llm_calls "
+            "WHERE match_run_id = %s GROUP BY prompt_hash HAVING count(*) > 1) AS dupes",
+            (MATCH_ID,),
+        )
+        rebilled = _one(cursor)[0]
+    assert rebilled == 0, f"{rebilled} prompt(s) were billed twice across the crash"
+
 
 def test_the_same_message_run_twice_against_postgres_is_a_no_op(
     postgres: psycopg.Connection[Any], tmp_path: Path
@@ -327,7 +398,7 @@ def test_the_same_message_run_twice_against_postgres_is_a_no_op(
     """At-least-once delivery against the real unique constraints."""
     seed_pipeline_fixtures(tmp_path, verify=False)
     _seed(postgres)
-    port = 8732
+    port = _free_port()
 
     first_log = tmp_path / "delivery-1.log"
     first = _spawn(tmp_path, port, first_log)

@@ -734,6 +734,19 @@ class InMemoryStore:
                 )
             self.judgments[key] = {**self.judgments.get(key, {}), **row}
 
+    async def load_judgments(self, match_id: str, nct_id: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "criterion_id": key[2],
+                "kind": row["kind"],
+                "label": row["label"],
+                "evidence_sentence_ids": list(row["evidence_sentence_ids"]),
+                "explanation": row["explanation"],
+            }
+            for key, row in self.judgments.items()
+            if key[0] == match_id and key[1] == nct_id
+        ]
+
     async def record_llm_call(self, row: dict[str, Any]) -> None:
         """Append-only, deliberately - see ``PostgresStore.record_llm_call``.
 
