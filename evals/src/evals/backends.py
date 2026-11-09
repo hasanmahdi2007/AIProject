@@ -72,9 +72,17 @@ class RetrievalBackend(Protocol):
     here (as an object with the attributes a backend needs) only to keep this
     module free of a circular import. Implementations should read the fields
     they understand and ignore the rest.
+
+    ``name`` is a read-only property rather than a plain attribute so that a
+    frozen dataclass can satisfy the protocol: under ``mypy``, a mutable
+    protocol attribute requires a *settable* one on the implementation, which
+    every backend here deliberately is not.
     """
 
-    name: str
+    @property
+    def name(self) -> str:
+        """Short identifier for the report's provenance line."""
+        ...
 
     def search(self, topic: Topic, config: object) -> list[str]:
         """Ranked trial ids for one topic, best first, no duplicates."""
@@ -278,12 +286,11 @@ class RunFileBackend:
             return run[topic.topic_id]
         except KeyError:
             raise RetrievalUnavailableError(
-                f"run file {self.path_for(config_name)} has no rows for topic "
-                f"{topic.topic_id}"
+                f"run file {self.path_for(config_name)} has no rows for topic {topic.topic_id}"
             ) from None
 
 
-HTTP_ADAPTER_SKETCH = '''\
+HTTP_ADAPTER_SKETCH = """\
 # Wiring the real retrieval service in, once `evals` is allowed an HTTP client
 # dependency (orchestrator's call - this agent may not edit evals/pyproject.toml
 # to add one). Nothing else in the harness changes.
@@ -298,6 +305,6 @@ HTTP_ADAPTER_SKETCH = '''\
 #       return [c.nct_id for c in SearchResponse.model_validate(reply.json()).candidates]
 #
 #   backend = CallableBackend(fn=search, name="retrieval-service")
-'''
+"""
 """Kept as a string, not as code, so that nothing here can accidentally open a
 socket and so the missing dependency is documented rather than smuggled in."""

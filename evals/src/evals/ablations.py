@@ -41,13 +41,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final, Literal
 
 from beacon_core.schemas import AgeSexFilter, RankedQuery, SearchRequest
-
 from evals.backends import (
     RetrievalBackend,
     RetrievalUnavailableError,
@@ -177,7 +176,9 @@ class RunConfig:
                 f"({self.fuse_top_k}); the reranker cannot see more than it is given"
             )
 
-    def to_search_request(self, queries: Sequence[RankedQuery], filters: AgeSexFilter) -> SearchRequest:
+    def to_search_request(
+        self, queries: Sequence[RankedQuery], filters: AgeSexFilter
+    ) -> SearchRequest:
         """Render this config into the frozen retrieval contract.
 
         The one place a config becomes a request, so the ablation table and the
@@ -617,15 +618,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Run the Beacon ablation table and the query-count sweep.",
     )
     parser.add_argument(
-        "--tune", type=int, choices=[TUNE_YEAR], default=TUNE_YEAR,
+        "--tune",
+        type=int,
+        choices=[TUNE_YEAR],
+        default=TUNE_YEAR,
         help=f"tuning split (only {TUNE_YEAR} is a tuning split)",
     )
     parser.add_argument(
-        "--test", type=int, choices=[2022], default=None,
+        "--test",
+        type=int,
+        choices=[2022],
+        default=None,
         help="also measure the held-out split; requires " + _HELD_OUT_FLAG,
     )
     parser.add_argument(
-        _HELD_OUT_FLAG, dest="unlock_reason", default=None, metavar="REASON",
+        _HELD_OUT_FLAG,
+        dest="unlock_reason",
+        default=None,
+        metavar="REASON",
         help="written reason (>=20 chars) for reading the held-out 2022 labels",
     )
     parser.add_argument("--runs", type=Path, default=None, help="directory of TREC run files")
@@ -633,9 +643,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument(
-        "--indexed-trials", type=int, default=None,
+        "--indexed-trials",
+        type=int,
+        default=None,
         help="documents in the index that produced the runs; omitting it marks "
-             "the results unpublishable",
+        "the results unpublishable",
     )
     args = parser.parse_args(argv)
 
@@ -643,10 +655,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.test is not None and not args.unlock_reason:
         parser.error(
-            f"--test {args.test} needs {_HELD_OUT_FLAG} \"<reason>\": the 2022 labels "
+            f'--test {args.test} needs {_HELD_OUT_FLAG} "<reason>": the 2022 labels '
             "are the headline measurement and are read once, after tuning on "
             f"{TUNE_YEAR} is frozen."
         )
+
+    # Take the unlock before any work: a reason too short to be a real one
+    # should fail in the first second, not after the tuning run has finished.
+    unlock = unlock_held_out(args.unlock_reason) if args.test is not None else None
 
     coverage = (
         CorpusCoverage(indexed_trials=args.indexed_trials, source="--indexed-trials")
@@ -661,24 +677,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     tune_split = load_tuning_split()
     reports.append(
         run_ablations(
-            backend, tune_split, coverage=coverage,
-            resamples=args.resamples, seed=args.seed,
+            backend,
+            tune_split,
+            coverage=coverage,
+            resamples=args.resamples,
+            seed=args.seed,
             title=f"Ablations on TREC {tune_split.year} (tuning)",
         )
     )
     if args.sweep:
         reports.append(
             run_query_count_sweep(
-                backend, tune_split, coverage=coverage,
-                resamples=args.resamples, seed=args.seed,
+                backend,
+                tune_split,
+                coverage=coverage,
+                resamples=args.resamples,
+                seed=args.seed,
             )
         )
-    if args.test is not None:
-        held_out = load_held_out_split(unlock_held_out(args.unlock_reason))
+    if unlock is not None:
+        held_out = load_held_out_split(unlock)
         reports.append(
             run_ablations(
-                backend, held_out, coverage=coverage,
-                resamples=args.resamples, seed=args.seed,
+                backend,
+                held_out,
+                coverage=coverage,
+                resamples=args.resamples,
+                seed=args.seed,
                 title=f"HELD-OUT measurement on TREC {held_out.year}",
             )
         )

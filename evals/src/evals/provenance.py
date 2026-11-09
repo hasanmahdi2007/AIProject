@@ -107,8 +107,7 @@ class CorpusCoverage:
         """A one-line warning to stamp on any result this coverage produced."""
         if self.is_complete:
             return (
-                f"FULL CORPUS: all {self.total_trials:,} TREC 2021 trials indexed "
-                f"({self.source})."
+                f"FULL CORPUS: all {self.total_trials:,} TREC 2021 trials indexed ({self.source})."
             )
         if not self.is_known:
             return (
@@ -236,9 +235,7 @@ class MeasurementProvenance:
         if self.backend == "unavailable":
             reasons.append("no retrieval backend produced this run")
         elif self.backend == "scripted":
-            reasons.append(
-                "the run came from a scripted test backend, not from a retrieval system"
-            )
+            reasons.append("the run came from a scripted test backend, not from a retrieval system")
         return tuple(reasons)
 
     def to_dict(self) -> dict[str, Any]:

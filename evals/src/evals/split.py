@@ -160,11 +160,7 @@ class EvalSplit:
         if not self.topics:
             raise ValueError(f"{self.name}: a split with no topics scores nothing")
         expected = EXPECTED_TOPIC_COUNTS.get(self.year)
-        if (
-            self.name in FULL_SPLIT_NAMES
-            and expected is not None
-            and len(self.topics) != expected
-        ):
+        if self.name in FULL_SPLIT_NAMES and expected is not None and len(self.topics) != expected:
             raise ValueError(
                 f"TREC {self.year} must have {expected} topics, loaded "
                 f"{len(self.topics)}. A partial topics file would skew every "

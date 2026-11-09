@@ -200,9 +200,16 @@ class JudgeLlm(Protocol):
 
 @runtime_checkable
 class JudgeBackend(Protocol):
-    """Anything that can produce a verdict for an item."""
+    """Anything that can produce a verdict for an item.
 
-    model: str
+    ``model`` is a read-only property so the frozen judge dataclasses satisfy
+    it; a mutable protocol attribute would demand a settable one.
+    """
+
+    @property
+    def model(self) -> str:
+        """Identifier of whatever produced the verdicts, for the report."""
+        ...
 
     def judge(self, item: JudgeItem) -> JudgeVerdict: ...
 
@@ -474,9 +481,7 @@ def cohens_kappa(
             ``labels``.
     """
     if len(rater_a) != len(rater_b):
-        raise ValueError(
-            f"raters must label the same items: {len(rater_a)} vs {len(rater_b)}"
-        )
+        raise ValueError(f"raters must label the same items: {len(rater_a)} vs {len(rater_b)}")
     if not rater_a:
         raise ValueError("no items to compare")
 
@@ -497,9 +502,9 @@ def cohens_kappa(
     marginal_a = [sum(confusion[i]) / n for i in range(k)]
     marginal_b = [sum(confusion[i][j] for i in range(k)) / n for j in range(k)]
 
-    observed = sum(
-        confusion[i][j] * _weight(i, j, k, weights) for i in range(k) for j in range(k)
-    ) / n
+    observed = (
+        sum(confusion[i][j] * _weight(i, j, k, weights) for i in range(k) for j in range(k)) / n
+    )
     expected = sum(
         marginal_a[i] * marginal_b[j] * _weight(i, j, k, weights)
         for i in range(k)
@@ -578,9 +583,7 @@ def load_hand_labels(path: Path) -> dict[str, EligibilityCategory]:
         item_id = str(entry["item_id"])
         label = entry["label"]
         if label not in ELIGIBILITY_LABELS:
-            raise ValueError(
-                f"{path}:{lineno}: label {label!r} is not one of {ELIGIBILITY_LABELS}"
-            )
+            raise ValueError(f"{path}:{lineno}: label {label!r} is not one of {ELIGIBILITY_LABELS}")
         if item_id in labels:
             raise ValueError(f"{path}:{lineno}: duplicate item_id {item_id!r}")
         labels[item_id] = label
@@ -611,6 +614,4 @@ def calibrate(
     item_list = list(items)
     verdicts = {item.item_id: judge.judge(item).label for item in item_list}
     _, hand, judged = agreement_table(dict(hand_labels), verdicts)
-    return cohens_kappa(
-        hand, judged, labels=ELIGIBILITY_LABELS, weights=weights, target=target
-    )
+    return cohens_kappa(hand, judged, labels=ELIGIBILITY_LABELS, weights=weights, target=target)

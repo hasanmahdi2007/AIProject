@@ -50,11 +50,12 @@ from evals.ablations import (
 from evals.backends import RetrievalBackend, RunFileBackend, UnavailableBackend
 from evals.bootstrap import DEFAULT_RESAMPLES, DEFAULT_SEED
 from evals.judge import KAPPA_TARGET, KappaResult
-from evals.metrics import DEFAULT_RELEVANCE_THRESHOLD, HEADLINE_METRICS
+from evals.metrics import DEFAULT_RELEVANCE_THRESHOLD
 from evals.provenance import UNKNOWN_COVERAGE, CorpusCoverage
 from evals.split import (
     HELD_OUT_YEAR,
     TUNE_YEAR,
+    HeldOutUnlock,
     load_held_out_split,
     load_tuning_split,
     unlock_held_out,
@@ -121,8 +122,7 @@ def render_markdown(report: AblationReport) -> str:
         lines.append("")
 
     lines += [
-        f"- Split: **{prov.split_name}** (TREC {prov.split_year}), "
-        f"{prov.n_topics} topics",
+        f"- Split: **{prov.split_name}** (TREC {prov.split_year}), {prov.n_topics} topics",
         f"- Retrieval backend: `{prov.backend}`",
         f"- Corpus: {prov.coverage.indexed_trials if prov.coverage.is_known else 'unknown'}"
         f" / {prov.coverage.total_trials:,} trials indexed",
@@ -224,8 +224,7 @@ def _render_kappa(kappa: KappaResult | None, reason: str) -> str:
         f"- {kappa}",
         f"- Labels: {', '.join(kappa.labels)}",
         f"- Weighting: `{kappa.weights}`",
-        f"- Target: kappa >= {kappa.target} - "
-        f"{'met' if kappa.meets_target else '**NOT met**'}",
+        f"- Target: kappa >= {kappa.target} - {'met' if kappa.meets_target else '**NOT met**'}",
         "",
     ]
     if not kappa.meets_target:
@@ -266,7 +265,7 @@ class ReportBundle:
             "",
             "Regenerate with `uv run python -m evals.report`. Every number below was "
             "measured by that command in the run that produced this file. Anything "
-            f"not measured says so; nothing is estimated, and no figure is carried "
+            "not measured says so; nothing is estimated, and no figure is carried "
             "over from a paper or a previous run.",
             "",
             "## How to read the split",
@@ -326,15 +325,18 @@ def build_report(
     resamples: int = DEFAULT_RESAMPLES,
     seed: int = DEFAULT_SEED,
     sweep: bool = True,
-    held_out_reason: str | None = None,
+    held_out: HeldOutUnlock | None = None,
     kappa: KappaResult | None = None,
     kappa_reason: str = "no hand labels supplied (--hand-labels)",
 ) -> ReportBundle:
     """Measure everything and return it. Does no file I/O.
 
     Args:
-        held_out_reason: when given, unlocks and measures the held-out split.
-            ``None`` leaves 2022 untouched, which is the default.
+        held_out: a capability token from
+            :func:`evals.split.unlock_held_out`. ``None`` - the default -
+            leaves the 2022 labels untouched. Taking the token rather than a
+            reason string is deliberate: there is no string a caller can pass
+            that bypasses the unlock's validation and logging.
     """
     tune_split = load_tuning_split()
     ablations = run_ablations(
@@ -346,13 +348,15 @@ def build_report(
         title=f"Ablations on TREC {tune_split.year} (tuning split)",
     )
     sweep_report = (
-        run_query_count_sweep(backend, tune_split, coverage=coverage, resamples=resamples, seed=seed)
+        run_query_count_sweep(
+            backend, tune_split, coverage=coverage, resamples=resamples, seed=seed
+        )
         if sweep
         else None
     )
     held_out_report = None
-    if held_out_reason:
-        split = load_held_out_split(unlock_held_out(held_out_reason))
+    if held_out is not None:
+        split = load_held_out_split(held_out)
         held_out_report = run_ablations(
             backend,
             split,
@@ -402,17 +406,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--no-sweep", action="store_true", help="skip the query-count sweep")
     parser.add_argument(
-        "--indexed-trials", type=int, default=None,
+        "--indexed-trials",
+        type=int,
+        default=None,
         help="documents in the index that produced the runs. Omitting it marks every "
-             "result unpublishable, which is the safe default.",
+        "result unpublishable, which is the safe default.",
     )
     parser.add_argument(
-        "--i-have-finished-tuning", dest="held_out_reason", default=None, metavar="REASON",
+        "--i-have-finished-tuning",
+        dest="held_out_reason",
+        default=None,
+        metavar="REASON",
         help=f"measure the held-out TREC {HELD_OUT_YEAR} split, recording this reason",
     )
     parser.add_argument("--hand-labels", type=Path, default=None, help="judge hand labels (JSONL)")
     parser.add_argument(
-        "--judge-fixtures", type=Path, default=None,
+        "--judge-fixtures",
+        type=Path,
+        default=None,
         help="recorded judge verdicts (JSON). No live judge call is ever made.",
     )
     args = parser.parse_args(argv)
@@ -436,6 +447,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         else UNKNOWN_COVERAGE
     )
 
+    # Unlock first, so a reason too short to be a real one fails before the
+    # tuning run rather than after it.
+    unlock = unlock_held_out(args.held_out_reason) if args.held_out_reason else None
+
     kappa, kappa_reason = _maybe_kappa(args.hand_labels, args.judge_fixtures)
 
     bundle = build_report(
@@ -444,7 +459,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         resamples=args.resamples,
         seed=args.seed,
         sweep=not args.no_sweep,
-        held_out_reason=args.held_out_reason,
+        held_out=unlock,
         kappa=kappa,
         kappa_reason=kappa_reason,
     )
@@ -470,28 +485,20 @@ def _maybe_kappa(
     uncalibrated, which is the truth.
     """
     if hand_labels is None or judge_fixtures is None:
-        missing = [
-            flag
-            for flag, value in (("--hand-labels", hand_labels), ("--judge-fixtures", judge_fixtures))
-            if value is None
-        ]
+        flags = (("--hand-labels", hand_labels), ("--judge-fixtures", judge_fixtures))
+        missing = [flag for flag, value in flags if value is None]
         return None, f"missing {' and '.join(missing)}; no live judge call is ever made"
 
-    from evals.judge import (
-        ELIGIBILITY_LABELS,
-        FixtureJudge,
-        JudgeItem,
-        calibrate,
-        load_hand_labels,
-    )
+    from evals.judge import FixtureJudge, JudgeItem, calibrate, load_hand_labels
 
     labels = load_hand_labels(hand_labels)
     judge = FixtureJudge.from_file(judge_fixtures)
+    # The note and trial text are not needed to replay a recorded verdict; the
+    # item id is the join key. A live judge would be handed the real text.
     items = [
         JudgeItem(item_id=item_id, patient_note="", trial_id="", trial_text="")
         for item_id in sorted(labels)
     ]
-    assert ELIGIBILITY_LABELS  # the label set is fixed by the frozen contract
     return calibrate(items, labels, judge), ""
 
 

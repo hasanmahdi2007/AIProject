@@ -149,9 +149,7 @@ def _check_ranking(ranking: Sequence[str]) -> None:
     if len(set(ranking)) != len(ranking):
         counts = Counter(ranking)
         dupes = sorted(doc for doc, n in counts.items() if n > 1)
-        raise ValueError(
-            f"ranking contains {len(dupes)} duplicate document id(s): {dupes[:5]}"
-        )
+        raise ValueError(f"ranking contains {len(dupes)} duplicate document id(s): {dupes[:5]}")
 
 
 def _relevant_ids(judged: Mapping[str, int], threshold: int) -> frozenset[str]:
@@ -510,12 +508,8 @@ def _ranx_inputs(
     if spec.is_graded:
         ranx_qrels = {t: {d: g for d, g in qrels[t].items() if g > 0} for t in topics}
     else:
-        ranx_qrels = {
-            t: {d: g for d, g in qrels[t].items() if g >= spec.threshold} for t in topics
-        }
-    ranx_run = {
-        t: {doc: float(len(run[t]) - i) for i, doc in enumerate(run[t])} for t in topics
-    }
+        ranx_qrels = {t: {d: g for d, g in qrels[t].items() if g >= spec.threshold} for t in topics}
+    ranx_run = {t: {doc: float(len(run[t]) - i) for i, doc in enumerate(run[t])} for t in topics}
     return ranx_qrels, ranx_run
 
 
@@ -556,7 +550,5 @@ def crosscheck_with_ranx(
                 spec.ranx_name,
             )
         )
-        checks.append(
-            CrossCheck(metric=spec.name, mine=mine, ranx=theirs, n_topics=len(usable))
-        )
+        checks.append(CrossCheck(metric=spec.name, mine=mine, ranx=theirs, n_topics=len(usable)))
     return tuple(checks)

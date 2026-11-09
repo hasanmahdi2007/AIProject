@@ -102,10 +102,7 @@ class ConfidenceInterval:
         return self.low > 0.0 or self.high < 0.0
 
     def format(self, places: int = 3) -> str:
-        return (
-            f"{self.point:.{places}f} "
-            f"[{self.low:.{places}f}, {self.high:.{places}f}]"
-        )
+        return f"{self.point:.{places}f} [{self.low:.{places}f}, {self.high:.{places}f}]"
 
     def __str__(self) -> str:
         return self.format()
@@ -128,7 +125,7 @@ def _percentile(sorted_values: Sequence[float], q: float) -> float:
     if not 0.0 <= q <= 1.0:
         raise ValueError(f"q must be in [0, 1], got {q}")
     n = len(sorted_values)
-    index = min(n - 1, max(0, int(math.floor(q * n))))
+    index = min(n - 1, max(0, math.floor(q * n)))
     return sorted_values[index]
 
 
