@@ -10,6 +10,10 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from alembic.runtime.environment import (
+    NameFilterParentNames,
+    NameFilterType,
+)
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -54,7 +58,11 @@ the library's schema and silently diverge the next time LangGraph changes it.
 """
 
 
-def include_name(name: str | None, type_: str, parent_names: dict[str, str | None]) -> bool:
+def include_name(
+    name: str | None,
+    type_: NameFilterType,
+    parent_names: NameFilterParentNames,
+) -> bool:
     """Keep externally-managed tables out of autogenerate's comparison.
 
     Filtering by *name* rather than by object is what makes a reflected table
