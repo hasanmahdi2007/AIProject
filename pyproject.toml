@@ -108,6 +108,24 @@ ignore_missing_imports = true
 # to tests/ would collect none of them and CI would pass while testing nothing.
 # importlib import mode is what lets two packages each have a tests/test_main.py
 # without pytest raising an import-file-mismatch.
+#
+# BUT mypy does not use pytest's import mode, and it maps a file with no
+# __init__.py to a module named after its basename. Two packages each holding
+# tests/test_pipeline.py therefore both become module "test_pipeline" and
+# `mypy .` fails with "Duplicate module named ...", which stops type checking
+# for the whole repo:
+#
+#     services/match_worker/tests/test_pipeline.py: error: Duplicate module
+#     named "test_pipeline" (also at "./services/ingestion/tests/test_pipeline.py")
+#
+# Adding __init__.py does not fix it in a src layout - mypy would derive
+# "tests.test_pipeline" for both, since services/<name> is not itself a package.
+#
+# So the rule is: **a test module basename must be unique across the whole
+# workspace.** Prefix it with the package when the bare name is generic -
+# test_ingest_pipeline.py and test_worker_pipeline.py, not two test_pipeline.py.
+# This bit on 9 Nov: B1's and C1's PRs were each green alone and broke mypy only
+# once both were merged, because neither branch contained the other's file.
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-q --strict-markers --import-mode=importlib"

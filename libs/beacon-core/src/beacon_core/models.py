@@ -124,7 +124,21 @@ class TrialCriterion(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     parser: Mapped[str] = mapped_column(String(32), default="rules", server_default="rules")
-    """``rules`` or ``llm_fallback`` - so the fallback rate is measurable."""
+    """``rules`` or ``unstructured`` - so the fallback rate is measurable.
+
+    ``rules`` is the structure-aware split: a section header, then bullets or
+    numbering. ``unstructured`` is the regex fallback for the records whose
+    shape defeats that.
+
+    Not ``llm_fallback``, which this docstring claimed until 9 Nov. No LLM is
+    called anywhere in rule splitting, so that value would have made this very
+    metric a lie. B1 declined to write the documented value for exactly that
+    reason and used ``unstructured`` instead, which was the right call: the
+    name is reserved for a real LLM pass, whose value over the regex path is
+    then measurable as the difference between the two.
+
+    Measured over the first 130,024 trials: 21,308 of 164,602 rows, 12.9%,
+    took the ``unstructured`` path."""
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
