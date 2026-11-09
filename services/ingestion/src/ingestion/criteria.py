@@ -73,6 +73,7 @@ from dataclasses import dataclass
 __all__ = [
     "DEFAULT_KIND",
     "MAX_CRITERIA_PER_TRIAL",
+    "MAX_SUBHEADING_CHARS",
     "MIN_CRITERION_CHARS",
     "NON_CRITERIA_TEXTS",
     "PARSER_RULES",
@@ -100,6 +101,14 @@ trial.
 
 MIN_CRITERION_CHARS = 3
 """Below this a fragment carries no judgeable content (``"-"``, ``"1."``)."""
+
+MAX_SUBHEADING_CHARS = 120
+"""Longest line that may be read as a sub-heading rather than as prose.
+
+A sub-heading is a short colon-terminated label such as ``"Concurrent
+Medication:"``. The limit is what stops a long sentence that happens to end in
+a colon from being hoisted out of its criterion and prefixed onto the next
+several."""
 
 MAX_CRITERIA_PER_TRIAL = 300
 """Guard against a pathological record producing thousands of rows. The 99.9th
@@ -156,6 +165,29 @@ _HEADER_RE = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+
+_HEADER_NO_COLON_RE = re.compile(
+    r"""^
+    [ \t]*
+    (?:[-\u2013\u2014*\u2022\u00b7\u25cf]+[ \t]+)?
+    (?P<pre>[a-z()/&' \t\u2013-]{0,28}?)
+    \b(?P<kind>inclusion|exclusion|ineligibility|eligibility)\b
+    [ \t]*(?:criteria|criterion)?[ \t]*[.\u2013-]?[ \t]*
+    $""",
+    re.IGNORECASE | re.VERBOSE,
+)
+"""``Inclusion Criteria`` on a line of its own, with no colon.
+
+The NIAID AIDS-trial records -- a large family in this corpus, e.g.
+``NCT00000637`` -- write their headers this way. Requiring the colon made the
+splitter miss them, which filed every exclusion rule in those trials as an
+inclusion: the single worst error this module can make, because an inclusion
+the patient fails reads as *insufficient evidence* while an exclusion they
+match reads as *excluded*. Found by the first 1,000-record smoke run.
+
+Safe because the match must consume the entire line: a line that is nothing
+but the words "Exclusion Criteria" is not a rule under any reading.
+"""
 
 _HEADER_PRE_RE = re.compile(r"^[a-z()/&' \t\u2013-]*$", re.IGNORECASE)
 """The words allowed before the keyword (``Key``, ``Main``, ``Patient``, ...).
@@ -255,19 +287,24 @@ def _header_kind(line: str) -> tuple[str | None, str] | None:
     if not line.strip():
         return None
     match = _HEADER_RE.match(line)
-    if match is None:
-        return None
+    rest = ""
+    if match is not None:
+        post = match["post"] or ""
+        if "." in post:
+            return None
+        rest = match["rest"].strip()
+    else:
+        match = _HEADER_NO_COLON_RE.match(line)
+        if match is None:
+            return None
     pre = match["pre"] or ""
     if not _HEADER_PRE_RE.match(pre) or _HEADER_NEGATIVE_RE.search(pre):
         return None
-    post = match["post"] or ""
-    if "." in post:
-        return None
     keyword = match["kind"].lower()
     if keyword in _NEUTRAL_KEYWORDS:
-        return None, match["rest"].strip()
+        return None, rest
     kind = "exclusion" if keyword in _EXCLUSION_KEYWORDS else "inclusion"
-    return kind, match["rest"].strip()
+    return kind, rest
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,7 +401,22 @@ def _items_from_markers(lines: tuple[str, ...], markers: dict[int, tuple[int, in
     with dashes at another inside the same exclusion list -- and splitting
     there is right.
 
-    Unmarked lines are always continuations of the open item, which is how
+    An unmarked line at or above the top level that ends in a colon is a
+    *sub-heading*, and it is prefixed onto every item beneath it instead of
+    becoming an item of its own. ``NCT00000637`` is the case that forces this:
+    under ``Inclusion Criteria`` it writes ``Concurrent Medication:`` then
+    ``Allowed:`` then the bullets, and later ``Excluded:`` then more bullets.
+    Emitted alone, ``"Allowed:"`` is not a rule; glued to the end of the
+    preceding bullet -- which is what happens if it is treated as an ordinary
+    continuation -- it corrupts that rule instead. Prefixed, the stored
+    criterion reads ``"Concurrent Medication: Allowed: Acetaminophen,
+    ibuprofen, or aspirin..."``, which is judgeable and true to the source.
+
+    A new sub-heading run replaces the previous one rather than nesting under
+    it, because the records write sibling sub-headings at the same indent and
+    there is no reliable signal to tell a sibling from a child.
+
+    All other unmarked lines are continuations of the open item, which is how
     wrapped text rejoins.
     """
     first_indent = min(index for index in markers)
@@ -372,6 +424,11 @@ def _items_from_markers(lines: tuple[str, ...], markers: dict[int, tuple[int, in
     items: list[list[str]] = []
     preamble: list[str] = []
     folded_depths: set[int] = set()
+    context: list[str] = []
+    context_open = False
+
+    def prefixed(body: str) -> str:
+        return f"{' '.join(context)} {body}" if context else body
 
     for index, line in enumerate(lines):
         stripped = line.strip()
@@ -379,23 +436,33 @@ def _items_from_markers(lines: tuple[str, ...], markers: dict[int, tuple[int, in
             continue
         marker = markers.get(index)
         if marker is None:
+            indent = len(line) - len(line.lstrip())
+            if indent <= top and stripped.endswith(":") and len(stripped) <= MAX_SUBHEADING_CHARS:
+                if not context_open:
+                    context.clear()
+                    context_open = True
+                context.append(stripped)
+                continue
             piece = stripped
         else:
             indent, offset = marker
             body = line[offset:].strip()
             open_item = " ".join(items[-1]) if items else ""
             if indent <= top:
-                items.append([body])
+                items.append([prefixed(body)])
                 folded_depths.clear()
+                context_open = False
                 continue
             if indent in folded_depths or open_item.endswith(":"):
                 folded_depths.add(indent)
                 # Keep a visible separator so the folded sub-structure survives.
                 piece = f"- {body}"
             else:
-                items.append([body])
+                items.append([prefixed(body)])
                 folded_depths.clear()
+                context_open = False
                 continue
+        context_open = False
         if items:
             items[-1].append(piece)
         else:

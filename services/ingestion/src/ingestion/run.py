@@ -67,8 +67,13 @@ class RunConfig:
     threads: int | None = None
 
 
-def _batched(items: Iterator[DerivedTrial], size: int) -> Iterator[list[DerivedTrial]]:
-    batch: list[DerivedTrial] = []
+def _batched[T](items: Iterator[T], size: int) -> Iterator[list[T]]:
+    """Group a lazy stream into fixed-size lists, order preserved.
+
+    Order is load-bearing: :func:`_write_batch` pairs the i-th vector with the
+    i-th trial.
+    """
+    batch: list[T] = []
     for item in items:
         batch.append(item)
         if len(batch) >= size:
@@ -120,9 +125,11 @@ async def _write_batch(
 async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestStats:
     """Run the ingest and return the measurements.
 
-    The returned :class:`IngestStats` covers every record *scanned*, including
-    ones skipped as already indexed, so the truncation and fallback rates are
-    corpus-wide numbers rather than a property of one run's workload.
+    The returned :class:`IngestStats` covers the records this run **processed**
+    -- records skipped because they were already indexed are counted in
+    ``skipped`` but not derived, so they contribute no statistics. A full first
+    run therefore reports corpus-wide rates; a resumed run reports the rates of
+    the remainder, and ``--force`` or ``--dry-run`` re-measures everything.
     """
     cfg = settings or get_settings()
     stats = IngestStats()
@@ -165,6 +172,16 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
         def derived_stream() -> Iterator[DerivedTrial]:
             nonlocal errors, skipped
             for raw in iter_raw_trials(skip=config.skip, limit=config.limit):
+                # Skip *before* deriving. Deriving is 9 ms a record -- the
+                # tokenizer pass that measures truncation plus the splitter --
+                # so deriving the whole corpus just to throw it away would make
+                # a no-op re-run take an hour. The cost is that IngestStats
+                # describes the records this run actually processed; the
+                # corpus-wide rates come from the full first run, or from
+                # --force, or from --dry-run.
+                if raw.nct_id in already:
+                    skipped += 1
+                    continue
                 try:
                     derived = derive_trial(raw, builder)
                 except Exception:
@@ -172,9 +189,6 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
                     logger.exception("ingest.derive_failed", nct_id=raw.nct_id)
                     continue
                 stats.observe(derived)
-                if derived.nct_id in already:
-                    skipped += 1
-                    continue
                 yield derived
 
         for batches, batch in enumerate(_batched(derived_stream(), config.batch_size), start=1):

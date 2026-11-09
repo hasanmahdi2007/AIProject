@@ -13,6 +13,7 @@ import pytest
 from ingestion._testing import REAL_RECORDS, record
 from ingestion.criteria import (
     MAX_CRITERIA_PER_TRIAL,
+    MAX_SUBHEADING_CHARS,
     PARSER_RULES,
     PARSER_UNSTRUCTURED,
     SplitResult,
@@ -82,14 +83,24 @@ def test_criterion_id_helper() -> None:
 
 
 def test_numbered_list_with_no_headers() -> None:
-    """NCT00000162 -- a numbered list, no headers, with a lead-in line."""
+    """NCT00000162 -- a numbered list, no headers, under a lead-in line.
+
+    The lead-in is prefixed onto each rule rather than emitted alone: on its
+    own, ``"Patients with three types of diagnoses were accepted:"`` states no
+    criterion, and ``"major BVO without neovascularization"`` on its own does
+    not say it is one of the three accepted diagnoses.
+    """
     result = _split("NCT00000162")
     assert result.had_headers is False
     assert result.marker_style == "number"
-    assert len(result.criteria) == 4
-    # The lead-in survives as its own item rather than being glued to rule 1.
-    assert result.criteria[0].text == "Patients with three types of diagnoses were accepted:"
-    assert result.criteria[1].text == "major BVO without neovascularization"
+    assert len(result.criteria) == 3
+    assert result.criteria[0].text == (
+        "Patients with three types of diagnoses were accepted: major BVO without neovascularization"
+    )
+    assert all(
+        c.text.startswith("Patients with three types of diagnoses were accepted:")
+        for c in result.criteria
+    )
     # Un-headed criteria default to inclusion, the safe direction.
     assert {c.kind for c in result.criteria} == {"inclusion"}
 
@@ -184,6 +195,58 @@ def test_free_prose_is_kept_whole_not_chunked() -> None:
     assert only.parser == PARSER_UNSTRUCTURED
     assert only.text.endswith("are eligible for CEOS.")
     assert only.kind == "inclusion"
+
+
+def test_header_without_a_colon_is_still_a_header() -> None:
+    """NCT00000637 writes ``Inclusion Criteria`` / ``Exclusion Criteria`` bare.
+
+    This is the regression that the first 1,000-record smoke run exposed, and
+    it is the worst mistake this module can make. With the colon required, the
+    exclusion header was invisible, the section never changed, and all
+    eighteen exclusion rules of this trial were stored as *inclusions* -- which
+    inverts their meaning: an inclusion the patient fails reads as insufficient
+    evidence, while an exclusion they match reads as excluded.
+    """
+    result = _split("NCT00000637")
+    kinds = [c.kind for c in result.criteria]
+    assert result.had_headers is True
+    assert "exclusion" in kinds, "the bare 'Exclusion Criteria' header must open a section"
+    assert kinds.count("inclusion") == 6
+    assert kinds.count("exclusion") == 18
+    # The header text itself never becomes a rule.
+    assert not any(c.text.strip().lower().startswith("inclusion criteria") for c in result.criteria)
+
+
+def test_sub_headings_are_prefixed_onto_the_rules_beneath_them() -> None:
+    """NCT00000637 nests rules under ``Concurrent Medication:`` / ``Allowed:``.
+
+    Three possible treatments, only one of which is right:
+
+    * emit ``"Allowed:"`` as a rule -- it states nothing judgeable;
+    * append it to the preceding rule -- it corrupts a rule that was fine;
+    * prefix it onto the rules it introduces -- which is what the author meant
+      and what this asserts.
+    """
+    result = _split("NCT00000637")
+    texts = [c.text for c in result.criteria]
+    assert (
+        "Concurrent Medication: Allowed: Acetaminophen, ibuprofen, or aspirin, "
+        "but not on a continual basis for > 72 hours." in texts
+    )
+    assert "Patients must have the following: HIV infection." in texts
+    # The sub-heading is never a rule of its own, and never tacked on the end.
+    assert "Allowed:" not in texts
+    assert "Concurrent Medication:" not in texts
+    assert not any(t.endswith("Allowed:") for t in texts)
+    assert not any(t.endswith("Recommended:") for t in texts)
+
+
+def test_a_long_sentence_ending_in_a_colon_is_not_a_sub_heading() -> None:
+    """The length guard: only a short label may be hoisted as context."""
+    long_lead = "x" * (MAX_SUBHEADING_CHARS + 10) + ":"
+    text = f"Inclusion Criteria:\n\n        {long_lead}\n\n          -  Age over 18\n"
+    result = split_eligibility("NCT09999996", text)
+    assert [c.text for c in result.criteria] == [long_lead, "Age over 18"]
 
 
 def test_boilerplate_is_not_a_criterion() -> None:

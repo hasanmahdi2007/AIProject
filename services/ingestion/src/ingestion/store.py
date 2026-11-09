@@ -37,7 +37,7 @@ Hence: re-running the full ingest changes nothing.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -47,7 +47,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from beacon_core.models import Trial, TrialCriterion
+from beacon_core.models import Base, Trial, TrialCriterion
 from beacon_core.settings import QdrantSettings
 from ingestion.criteria import Criterion
 from ingestion.embedding import SparseValues
@@ -55,10 +55,12 @@ from ingestion.embedding import SparseValues
 __all__ = [
     "AGE_PAYLOAD_FIELDS",
     "BEACON_NAMESPACE",
+    "MAX_BIND_PARAMS",
     "PAYLOAD_INDEXES",
     "QdrantIndex",
     "SparseModifierMismatch",
     "TrialPoint",
+    "clear_criteria",
     "count_criteria",
     "count_trials",
     "indexed_nct_ids",
@@ -124,6 +126,31 @@ def point_id(nct_id: str) -> str:
 
 # ----------------------------------------------------------------- Postgres --
 
+MAX_BIND_PARAMS = 32_767
+"""PostgreSQL's wire-protocol ceiling on parameters in one statement.
+
+asyncpg raises ``InterfaceError: the number of query arguments cannot exceed
+32767`` the moment a multi-row ``INSERT`` crosses it, and a batch of 256 trials
+crosses it easily on ``trial_criteria``: 256 trials x ~25 rules x 6 columns is
+roughly 38,000. The first smoke run died on exactly that, after two successful
+batches -- which is why every multi-row statement here is chunked by column
+count rather than by a number that happened to work once.
+"""
+
+_BIND_PARAM_SAFETY = 0.8
+"""Headroom, because a row's column count is not the only thing that binds."""
+
+
+def _rows_per_statement(model: type[Base]) -> int:
+    """How many rows of ``model`` fit in one statement under the wire limit."""
+    columns = len(model.__table__.columns)
+    return max(1, int(MAX_BIND_PARAMS * _BIND_PARAM_SAFETY) // columns)
+
+
+def _chunks[T](rows: list[T], size: int) -> Iterator[list[T]]:
+    for start in range(0, len(rows), size):
+        yield rows[start : start + size]
+
 
 async def upsert_trials(session: AsyncSession, rows: Sequence[dict[str, Any]]) -> int:
     """Insert or update ``trials`` rows by ``nct_id``; returns rows written.
@@ -135,29 +162,38 @@ async def upsert_trials(session: AsyncSession, rows: Sequence[dict[str, Any]]) -
     """
     if not rows:
         return 0
-    statement = pg_insert(Trial).values(list(rows))
-    updatable = {
-        column.name: statement.excluded[column.name]
-        for column in Trial.__table__.columns
-        if column.name not in {"nct_id", "created_at", "indexed_at"}
-    }
-    updatable["indexed_at"] = None
-    await session.execute(
-        statement.on_conflict_do_update(index_elements=[Trial.nct_id], set_=updatable)
-    )
+    for chunk in _chunks(list(rows), _rows_per_statement(Trial)):
+        statement = pg_insert(Trial).values(chunk)
+        updatable = {
+            column.name: statement.excluded[column.name]
+            for column in Trial.__table__.columns
+            if column.name not in {"nct_id", "created_at", "indexed_at"}
+        }
+        updatable["indexed_at"] = None
+        await session.execute(
+            statement.on_conflict_do_update(index_elements=[Trial.nct_id], set_=updatable)
+        )
     return len(rows)
 
 
 async def upsert_criteria(session: AsyncSession, criteria: Sequence[Criterion]) -> int:
     """Replace the criteria of every trial mentioned in ``criteria``.
 
-    Upserts on ``(nct_id, criterion_id)`` so existing row ids stay stable, then
-    deletes any criterion of those trials that the splitter no longer produces.
-    Both halves are needed: without the delete, improving the splitter would
-    leave the old rules behind and every trial would accumulate duplicates.
+    Delete-then-insert, scoped to the trials in this batch and run inside the
+    caller's transaction, so the rule set *converges* on what the splitter
+    currently produces. An upsert alone would not: improving the splitter
+    almost always changes how many rules a trial yields, and the rules it no
+    longer emits would be left behind for ever, so every trial would slowly
+    accumulate contradictory duplicates.
+
+    Row ids churn as a result. Nothing refers to them: the stable, citable key
+    is ``criterion_id`` (``NCT01234567:inc:03``), which is what a judgment
+    stores, and no foreign key points at ``trial_criteria.id``.
     """
     if not criteria:
         return 0
+    nct_ids = sorted({c.nct_id for c in criteria})
+    await clear_criteria(session, nct_ids)
     rows = [
         {
             "nct_id": c.nct_id,
@@ -169,36 +205,19 @@ async def upsert_criteria(session: AsyncSession, criteria: Sequence[Criterion]) 
         }
         for c in criteria
     ]
-    statement = pg_insert(TrialCriterion).values(rows)
-    await session.execute(
-        statement.on_conflict_do_update(
-            index_elements=[TrialCriterion.nct_id, TrialCriterion.criterion_id],
-            set_={
-                "kind": statement.excluded.kind,
-                "position": statement.excluded.position,
-                "text": statement.excluded.text,
-                "parser": statement.excluded.parser,
-            },
-        )
-    )
-    keep: dict[str, set[str]] = {}
-    for c in criteria:
-        keep.setdefault(c.nct_id, set()).add(c.criterion_id)
-    for nct_id, ids in keep.items():
-        await session.execute(
-            delete(TrialCriterion).where(
-                TrialCriterion.nct_id == nct_id,
-                TrialCriterion.criterion_id.notin_(ids),
-            )
-        )
+    for chunk in _chunks(rows, _rows_per_statement(TrialCriterion)):
+        await session.execute(pg_insert(TrialCriterion).values(chunk))
     return len(rows)
+
+
+_IDS_PER_STATEMENT = 2_000
+"""Identifiers per ``IN (...)`` clause, well under :data:`MAX_BIND_PARAMS`."""
 
 
 async def clear_criteria(session: AsyncSession, nct_ids: Sequence[str]) -> None:
     """Drop every criterion of these trials (used when a trial yields none)."""
-    if not nct_ids:
-        return
-    await session.execute(delete(TrialCriterion).where(TrialCriterion.nct_id.in_(nct_ids)))
+    for chunk in _chunks(list(nct_ids), _IDS_PER_STATEMENT):
+        await session.execute(delete(TrialCriterion).where(TrialCriterion.nct_id.in_(chunk)))
 
 
 async def mark_indexed(
@@ -210,10 +229,9 @@ async def mark_indexed(
     docstring. ``indexed_at`` is the resume marker, so setting it early would
     make an interrupted run look complete.
     """
-    if not nct_ids:
-        return
     stamp = when or datetime.now(UTC)
-    await session.execute(update(Trial).where(Trial.nct_id.in_(nct_ids)).values(indexed_at=stamp))
+    for chunk in _chunks(list(nct_ids), _IDS_PER_STATEMENT):
+        await session.execute(update(Trial).where(Trial.nct_id.in_(chunk)).values(indexed_at=stamp))
 
 
 async def indexed_nct_ids(session: AsyncSession) -> set[str]:
