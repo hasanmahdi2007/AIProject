@@ -180,22 +180,42 @@ class CrossEncoder:
         ]
 
 
-@lru_cache(maxsize=1)
+# The caches are keyed on the model name - a string - and not on ``Settings``.
+# ``Settings`` is a pydantic model with no ``__hash__``, so ``@lru_cache`` on a
+# function taking one raises ``TypeError: unhashable type: 'Settings'`` the
+# moment anybody passes a non-default settings object. (The same bug was found
+# and fixed in ``beacon_core.db.get_engine`` the same day.) Keying on the model
+# name is also the more correct cache key: the name is the only thing that
+# decides which weights get loaded, and two callers with different ``Settings``
+# but the same model should share one ONNX session rather than loading 280 MB
+# twice.
+
+
+@lru_cache(maxsize=4)
+def _dense_encoder(model_name: str, dim: int) -> DenseEncoder:
+    return DenseEncoder(model=TextEmbedding(model_name=model_name), dim=dim)
+
+
+@lru_cache(maxsize=4)
+def _sparse_encoder(model_name: str) -> SparseEncoder:
+    return SparseEncoder(model=SparseTextEmbedding(model_name=model_name))
+
+
+@lru_cache(maxsize=4)
+def _cross_encoder(model_name: str) -> CrossEncoder:
+    return CrossEncoder(model=TextCrossEncoder(model_name=model_name))
+
+
 def get_dense_encoder(settings: Settings | None = None) -> DenseEncoder:
-    cfg = settings or get_settings()
-    return DenseEncoder(
-        model=TextEmbedding(model_name=cfg.qdrant.dense_model),
-        dim=cfg.qdrant.dense_dim,
-    )
+    cfg = (settings or get_settings()).qdrant
+    return _dense_encoder(cfg.dense_model, cfg.dense_dim)
 
 
-@lru_cache(maxsize=1)
 def get_sparse_encoder(settings: Settings | None = None) -> SparseEncoder:
-    cfg = settings or get_settings()
-    return SparseEncoder(model=SparseTextEmbedding(model_name=cfg.qdrant.sparse_model))
+    cfg = (settings or get_settings()).qdrant
+    return _sparse_encoder(cfg.sparse_model)
 
 
-@lru_cache(maxsize=1)
 def get_cross_encoder(settings: Settings | None = None) -> CrossEncoder:
-    cfg = settings or get_settings()
-    return CrossEncoder(model=TextCrossEncoder(model_name=cfg.qdrant.reranker_model))
+    cfg = (settings or get_settings()).qdrant
+    return _cross_encoder(cfg.reranker_model)

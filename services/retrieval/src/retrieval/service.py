@@ -170,6 +170,13 @@ class RetrievalService:
         self._settings = settings
         self._hnsw_ef = hnsw_ef
 
+    @property
+    def searcher(self) -> HybridSearcher:
+        """Exposed so a test can build a second service over the same fixture
+        collection without re-upserting it, and so the health check reaches the
+        same Qdrant connection the searches use."""
+        return self._searcher
+
     async def verify(self) -> CollectionReport:
         """Check the collection's declarations. See :mod:`retrieval.collection`."""
         return await verify_collection(self._searcher.client, self._settings.qdrant)

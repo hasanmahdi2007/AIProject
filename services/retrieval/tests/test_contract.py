@@ -62,7 +62,11 @@ TEXTS = {
 
 BODY: dict[str, Any] = {
     "queries": [
-        {"rank": 1, "text": "metastatic EGFR-mutant non-small cell lung cancer", "facet": "diagnosis"},
+        {
+            "rank": 1,
+            "text": "metastatic EGFR-mutant non-small cell lung cancer",
+            "facet": "diagnosis",
+        },
         {"rank": 2, "text": "EGFR exon 19 deletion", "facet": "biomarker"},
     ],
     "filters": {"age": 52, "sex": "female", "include_unknown": True},
@@ -131,9 +135,7 @@ class TestRoundTrip:
         assert parsed.total_before_rerank == 3
         assert parsed.timings_ms["total"] > 0
 
-    def test_the_response_carries_no_fields_outside_the_contract(
-        self, client: TestClient
-    ) -> None:
+    def test_the_response_carries_no_fields_outside_the_contract(self, client: TestClient) -> None:
         payload = client.post("/search", json=BODY).json()
 
         assert set(payload) == {"candidates", "total_before_rerank", "timings_ms"}

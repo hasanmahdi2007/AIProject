@@ -46,20 +46,22 @@ from beacon_core.settings import QdrantSettings
 from retrieval.hydrate import TrialText
 
 __all__ = [
-    "FixtureTrial",
     "INTEGRATION_HINT",
     "SCALE_FILTER_AGE",
     "SCALE_SELECTIVITY",
     "SEMANTIC_TRIALS",
+    "FixtureTrial",
     "StubCrossEncoder",
     "StubDenseEncoder",
     "StubQdrantClient",
     "StubSparseEncoder",
     "create_scale_collection",
     "create_semantic_collection",
+    "deterministic_vectors",
     "missing_models",
     "point_id",
     "semantic_text_store",
+    "stub_collection_info",
 ]
 
 INTEGRATION_HINT = "Start the stack: docker compose -f deploy/compose.yaml up -d --wait"
@@ -429,11 +431,14 @@ async def _recreate(
 ) -> None:
     """Create the collection with the production vector configuration.
 
-    ``force_hnsw`` sets both thresholds to 1 KB so Qdrant actually builds and
-    uses an HNSW graph at fixture scale. Without it, a 1,200-point collection
-    sits under the default 20 MB ``indexing_threshold``, Qdrant's planner
-    answers every query by brute force, and the overfiltering test would be
-    measuring exact search while claiming to measure a graph walk.
+    ``force_hnsw`` sets both thresholds to their minimum so Qdrant actually
+    builds and uses an HNSW graph at fixture scale. Both are in **kilobytes of
+    vector data**, not points, and 10 KB is the smallest Qdrant accepts - a
+    1,000-point collection of 384 float32s is about 1,500 KB, so this puts it
+    well above both. Without it the collection sits under the default
+    ``indexing_threshold``, Qdrant's planner answers every query by brute
+    force, and the overfiltering test would be measuring exact search while
+    claiming to measure a graph walk.
     """
     if await client.collection_exists(name):
         await client.delete_collection(name)
@@ -457,12 +462,12 @@ async def _recreate(
             )
         },
         hnsw_config=(
-            models.HnswConfigDiff(m=16, ef_construct=100, full_scan_threshold=1)
+            models.HnswConfigDiff(m=16, ef_construct=100, full_scan_threshold=10)
             if force_hnsw
             else None
         ),
         optimizers_config=(
-            models.OptimizersConfigDiff(indexing_threshold=1) if force_hnsw else None
+            models.OptimizersConfigDiff(indexing_threshold=10) if force_hnsw else None
         ),
     )
     # The payload indexes the filters need. Float for the bounds, keyword for
@@ -483,6 +488,36 @@ async def _recreate(
         field_name="sex",
         field_schema=models.PayloadSchemaType.KEYWORD,
     )
+
+
+def deterministic_vectors(
+    count: int,
+    settings: QdrantSettings,
+    *,
+    seed: int = 7,
+) -> tuple[list[list[float]], list[models.SparseVector]]:
+    """Pseudo-random vectors for the semantic fixture, with no model loaded.
+
+    The filter tests - NULL age survives, a male-only trial is excluded for a
+    female patient - are about *which* points a filter admits, not about which
+    of them is most relevant. They assert set membership at a depth greater
+    than the fixture's size, so the vectors only have to be valid, not
+    meaningful. Keeping them model-free is what lets those tests run in CI,
+    where the FastEmbed cache is cold.
+
+    Index 1 is in every sparse vector so the sparse branch retrieves everything
+    the filter admits, matching :class:`StubSparseEncoder`'s query.
+    """
+    rng = random.Random(seed)
+    dense = [[rng.gauss(0.0, 1.0) for _ in range(settings.dense_dim)] for _ in range(count)]
+    sparse = [
+        models.SparseVector(
+            indices=[1, *sorted(rng.sample(range(10, 5_000), 5))],
+            values=[rng.uniform(0.2, 1.0) for _ in range(6)],
+        )
+        for _ in range(count)
+    ]
+    return dense, sparse
 
 
 async def create_semantic_collection(
@@ -570,9 +605,14 @@ async def create_scale_collection(
                     ],
                     # A handful of token slots with random weights: enough for
                     # the sparse branch to return a ranking, meaningless as
-                    # relevance, which is the point.
+                    # relevance, which is the point. Index 1 is on every point
+                    # - a "token every document contains" - so the sparse
+                    # branch can actually retrieve to the requested depth; the
+                    # overfiltering test has to see both branches return 20,
+                    # and a sparse query matching almost nothing would make the
+                    # dense branch the only thing under test.
                     settings.sparse_vector_name: models.SparseVector(
-                        indices=sorted(rng.sample(range(5_000), 12)),
+                        indices=[1, *sorted(rng.sample(range(10, 5_000), 11))],
                         values=[rng.uniform(0.2, 1.0) for _ in range(12)],
                     ),
                 },
@@ -639,9 +679,7 @@ class StubCrossEncoder:
         self.calls.append((query, len(documents)))
         out: list[float] = []
         for document in documents:
-            out.append(
-                next((v for k, v in self.scores.items() if k in document), self.default)
-            )
+            out.append(next((v for k, v in self.scores.items() if k in document), self.default))
         return out
 
 
@@ -675,9 +713,7 @@ class StubQdrantClient:
     async def collection_exists(self, collection_name: str, **kwargs: Any) -> bool:
         return self.exists
 
-    async def get_collection(
-        self, collection_name: str, **kwargs: Any
-    ) -> models.CollectionInfo:
+    async def get_collection(self, collection_name: str, **kwargs: Any) -> models.CollectionInfo:
         if self.info is None:
             raise AssertionError("StubQdrantClient was not given a CollectionInfo")
         return self.info
@@ -733,15 +769,11 @@ def stub_collection_info(
     """
     vectors: models.VectorsConfig | None
     if unnamed_vector:
-        vectors = models.VectorParams(
-            size=dense_dim or 384, distance=models.Distance.COSINE
-        )
+        vectors = models.VectorParams(size=dense_dim or 384, distance=models.Distance.COSINE)
     elif dense_dim is None:
         vectors = {}
     else:
-        vectors = {
-            dense_name: models.VectorParams(size=dense_dim, distance=models.Distance.COSINE)
-        }
+        vectors = {dense_name: models.VectorParams(size=dense_dim, distance=models.Distance.COSINE)}
 
     sparse_vectors = (
         None

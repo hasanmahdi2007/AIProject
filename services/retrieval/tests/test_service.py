@@ -21,7 +21,12 @@ from beacon_core.settings import Settings
 from retrieval.hydrate import MappingTrialTextStore, TrialText
 from retrieval.search import HybridSearcher
 from retrieval.service import RetrievalService, resolve_params
-from retrieval.testing import StubCrossEncoder, StubDenseEncoder, StubQdrantClient, StubSparseEncoder
+from retrieval.testing import (
+    StubCrossEncoder,
+    StubDenseEncoder,
+    StubQdrantClient,
+    StubSparseEncoder,
+)
 
 # The hand-computed case from test_fusion, now driven through the service:
 # one query, dense = [A, B, C], sparse = [C, A, D] -> A, C, B, D, with the
@@ -29,14 +34,38 @@ from retrieval.testing import StubCrossEncoder, StubDenseEncoder, StubQdrantClie
 ONE_QUERY_BRANCHES = [["NCTA", "NCTB", "NCTC"], ["NCTC", "NCTA", "NCTD"]]
 
 PAYLOADS = {
-    "NCTA": {"nct_id": "NCTA", "min_age_years": 18.0, "max_age_years": None, "sex": "all",
-          "phase": "Phase 3", "status": "Recruiting"},
-    "NCTB": {"nct_id": "NCTB", "min_age_years": None, "max_age_years": None, "sex": None,
-          "phase": None, "status": None},
-    "NCTC": {"nct_id": "NCTC", "min_age_years": 65.0, "max_age_years": 80.0, "sex": "male",
-          "phase": "Phase 1", "status": "Completed"},
-    "NCTD": {"nct_id": "NCTD", "min_age_years": 0.0, "max_age_years": 17.0, "sex": "female",
-          "phase": "Phase 2", "status": "Recruiting"},
+    "NCTA": {
+        "nct_id": "NCTA",
+        "min_age_years": 18.0,
+        "max_age_years": None,
+        "sex": "all",
+        "phase": "Phase 3",
+        "status": "Recruiting",
+    },
+    "NCTB": {
+        "nct_id": "NCTB",
+        "min_age_years": None,
+        "max_age_years": None,
+        "sex": None,
+        "phase": None,
+        "status": None,
+    },
+    "NCTC": {
+        "nct_id": "NCTC",
+        "min_age_years": 65.0,
+        "max_age_years": 80.0,
+        "sex": "male",
+        "phase": "Phase 1",
+        "status": "Completed",
+    },
+    "NCTD": {
+        "nct_id": "NCTD",
+        "min_age_years": 0.0,
+        "max_age_years": 17.0,
+        "sex": "female",
+        "phase": "Phase 2",
+        "status": "Recruiting",
+    },
 }
 
 TEXTS = {
@@ -45,7 +74,9 @@ TEXTS = {
         title=f"Trial {nct_id}",
         conditions=[f"Condition {nct_id}"],
         interventions=[f"Drug {nct_id}"],
-        overview_text=f"Trial {nct_id} studies melanoma." if nct_id == "NCTD" else f"Trial {nct_id}.",
+        overview_text=f"Trial {nct_id} studies melanoma."
+        if nct_id == "NCTD"
+        else f"Trial {nct_id}.",
     )
     for nct_id in PAYLOADS
 }
@@ -209,7 +240,9 @@ class TestFusionThroughTheService:
         ID - which would also put A first, so the test checks the *scores* and
         not only the order.
         """
-        service, _ = build_service([["NCTA", "NCTB"], ["NCTA", "NCTB"], ["NCTB", "NCTA"], ["NCTB", "NCTA"]])
+        service, _ = build_service(
+            [["NCTA", "NCTB"], ["NCTA", "NCTB"], ["NCTB", "NCTA"], ["NCTB", "NCTA"]]
+        )
         request = SearchRequest(
             queries=[
                 RankedQuery(rank=1, text="primary diagnosis"),
@@ -257,7 +290,8 @@ class TestRerank:
         mind has to be deliberate."""
         reranker = StubCrossEncoder(scores={})
         service, _ = build_service(
-            [["NCTA", "NCTB"], ["NCTA", "NCTB"], ["NCTB", "NCTA"], ["NCTB", "NCTA"]], cross_encoder=reranker
+            [["NCTA", "NCTB"], ["NCTA", "NCTB"], ["NCTB", "NCTA"], ["NCTB", "NCTA"]],
+            cross_encoder=reranker,
         )
         request = SearchRequest(
             queries=[
