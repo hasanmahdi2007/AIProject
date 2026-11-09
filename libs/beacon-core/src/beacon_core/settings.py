@@ -202,6 +202,26 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
 
+    cors_allow_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
+    )
+    """Browser origins allowed to call the gateway.
+
+    The console runs on :3000 and the gateway on :8000, which are **different
+    origins**, so without this every request from the browser fails the
+    preflight and the console shows "Failed to fetch" with no useful detail.
+
+    This was missed until 9 Nov because nothing had driven the console from a
+    real browser: ``curl`` and Node do not enforce the same-origin policy, so
+    every check passed while the one client that matters could not call the API
+    at all. A reminder that a verification tool which cannot reproduce the
+    client's constraints does not verify the client.
+
+    An explicit list, never ``["*"]``: wildcard origins cannot be combined with
+    credentialed requests, and this is a medical-decision-support surface where
+    "any website may call the API" is the wrong default even in dev. Set
+    ``BEACON_CORS_ALLOW_ORIGINS='["https://..."]'`` to deploy elsewhere."""
+
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)

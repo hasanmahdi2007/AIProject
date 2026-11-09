@@ -15,10 +15,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from beacon_core.db import dispose_engine
 from beacon_core.logging import configure_logging
 from beacon_core.redis import get_redis
+from beacon_core.settings import get_settings
 from gateway import __version__
 from gateway.router import router as api_router
 
@@ -48,6 +50,24 @@ def create_app() -> FastAPI:
         ),
         lifespan=lifespan,
     )
+    # The console is served from another origin (:3000 against the gateway's
+    # :8000), so without this the browser rejects every call at the preflight
+    # and the user sees only "Failed to fetch". Installed before the router so
+    # it wraps every route, including the SSE stream.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=get_settings().cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Last-Event-ID"],
+        expose_headers=["Location", "X-Match-Id"],
+    )
+    """``Location`` and ``X-Match-Id`` must be exposed explicitly: a browser hides
+    every response header from script except a short safelist, so a console
+    following the 202's ``Location`` would read ``null`` without this.
+    ``Last-Event-ID`` is allowed because that is the header an ``EventSource``
+    sends when it reconnects a dropped SSE stream."""
+
     app.include_router(api_router)
     return app
 
