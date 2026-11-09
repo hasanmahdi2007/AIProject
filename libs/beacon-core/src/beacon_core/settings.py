@@ -89,6 +89,47 @@ class QdrantSettings(BaseModel):
     silently degrades rare-term matching - the entire reason BM25 is here."""
 
     reranker_model: str = "BAAI/bge-reranker-base"
+    """The cross-encoder. Kept as the default deliberately, despite being slow.
+
+    **Measured by B2 on this hardware, 9 Nov: about 3 pairs/second on real
+    trial text, not the ~100 pairs/s the project guide estimates.** A live
+    rerank of 100 candidates took 161 s over HTTP before batching was fixed,
+    and about 34 s after. The guide's figure is wrong by roughly two orders of
+    magnitude and any latency claim derived from it is void.
+
+    ``Xenova/ms-marco-MiniLM-L-6-v2`` measured 7.6x faster (39-46 pairs/s) and
+    is a legitimate swap, but it is a general web-search reranker rather than
+    this one, so the trade is quality for latency and **must be settled by
+    B3's ablation on measured recall, not by preference.** That is why this
+    stays configurable and the default stays put."""
+
+    reranker_batch_size: int = 8
+    """Not 16, and not larger. Counter-intuitively, a wider batch was *worse*
+    in arrival order - 57 s at batch 8 versus 116 s at batch 32 over 100 real
+    overviews - because a batch is padded to its longest member and trial
+    lengths vary wildly (mean 163 tokens, p95 1,922, max 3,052).
+
+    B2 fixed the underlying waste with length-sorted batching, which scatters
+    results back to arrival order: 1.7x to 2.5x faster with results **identical
+    pair for pair, maximum difference exactly 0.0**. Padding is pure cost, so
+    removing it changes spend and nothing else."""
+
+    reranker_max_chars: int | None = None
+    """Truncate each document handed to the cross-encoder, or ``None`` to send
+    it whole.
+
+    This is the largest remaining cost lever, because cross-encoder time is
+    roughly linear in tokens: B2 measured 6.0 pairs/s at 128 characters against
+    1.4-1.9 at 1,572. Cutting the document to a few hundred characters would
+    plausibly pay for itself several times over.
+
+    It defaults to ``None`` - no truncation - because it is **not free**. The
+    reranker's whole advantage over the bi-encoder is reading the query and the
+    document together, so cutting the document removes exactly the evidence it
+    exists to weigh, and an eligibility-relevant phrase can sit anywhere in the
+    text. Whether that costs recall is an empirical question and belongs in the
+    ablation table beside the model choice, which is why this is a knob with a
+    conservative default rather than a value someone guessed."""
 
     @property
     def url(self) -> str:
