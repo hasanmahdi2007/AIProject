@@ -1,8 +1,8 @@
 """The gateway's HTTP surface.
 
-Four routes: a health probe that actually probes, a match submission that is
-one database transaction, an SSE progress stream, and the migrated chat
-endpoint.
+Five routes: a health probe that actually probes, a match submission that is
+one database transaction, a result read that survives a page reload, an SSE
+progress stream, and the migrated chat endpoint.
 
 Two things in here were already right in the spike and are deliberately
 preserved:
@@ -20,20 +20,40 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Sequence
 from typing import Any, Final, cast
 
 import anthropic
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from redis.asyncio.client import PubSub
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from beacon_core.events import TOPIC_MATCH_COMPLETED, TOPIC_MATCH_REQUESTED, MatchRequested
-from beacon_core.models import MatchRun, Outbox, Patient
+from beacon_core.models import (
+    CriterionJudgmentRow,
+    MatchRun,
+    Outbox,
+    Patient,
+    Trial,
+    TrialMatch,
+)
 from beacon_core.redis import chan_match
-from beacon_core.schemas import MatchStatus, PipelineStep
+from beacon_core.schemas import (
+    CriterionJudgment,
+    CriterionKind,
+    CriterionLabel,
+    EligibilityCategory,
+    MatchStatus,
+    NumberedNote,
+    PatientProfile,
+    PipelineStep,
+    RankedTrial,
+    Sex,
+    TrialCandidate,
+    TrialJudgment,
+)
 from gateway import __version__
 from gateway.deps import ClientDep, RedisDep, SessionmakerDep, StoreDep
 from gateway.schemas import (
@@ -42,6 +62,7 @@ from gateway.schemas import (
     HealthResponse,
     MatchAccepted,
     MatchRequest,
+    MatchResult,
     MatchStatusSnapshot,
 )
 from gateway.service import start_reply
@@ -185,6 +206,182 @@ async def create_match(
         patient_id=patient_id,
         status="queued",
         event_id=event.event_id,
+    )
+
+
+# ------------------------------------------------------------ match result --
+
+
+def _rank_rows(rows: Sequence[TrialMatch]) -> list[tuple[int, TrialMatch]]:
+    """Pair every stored trial with the rank to report for it.
+
+    ``final_rank`` is NULL until ``rank_and_explain`` runs, and
+    ``RankedTrial.rank`` is ``ge=1``, so an in-flight run's rows cannot simply
+    be passed through. Rows the worker ranked keep its numbering exactly; the
+    rest are numbered after the highest rank in use, ordered by retrieval rank.
+    That keeps ranks unique and never invents a final ordering the worker has
+    not decided yet.
+    """
+    ranked = sorted(
+        (r for r in rows if r.final_rank is not None and r.final_rank >= 1),
+        key=lambda r: (r.final_rank or 0, r.nct_id),
+    )
+    pending = sorted(
+        (r for r in rows if r.final_rank is None or r.final_rank < 1),
+        key=lambda r: (r.retrieval_rank is None, r.retrieval_rank or 0, r.nct_id),
+    )
+    out: list[tuple[int, TrialMatch]] = [(int(r.final_rank or 0), r) for r in ranked]
+    next_rank = max((rank for rank, _ in out), default=0) + 1
+    out.extend((next_rank + offset, row) for offset, row in enumerate(pending))
+    return out
+
+
+def _to_ranked_trial(
+    rank: int,
+    row: TrialMatch,
+    trial: Trial | None,
+    judged: Sequence[CriterionJudgmentRow],
+) -> RankedTrial:
+    """One ``trial_matches`` row plus its trial and its rules, as the contract.
+
+    ``trial`` is ``None`` only if the trial was deleted from under a finished
+    run. The pair is still reported - dropping it would make ``trial_count``
+    disagree with what the worker actually judged - with empty descriptive
+    fields, because the judgments are the part that matters here.
+
+    ``dense_score`` and ``sparse_score`` stay ``None``: ``trial_matches``
+    persists the fused and reranked scores, not the two per-leg scores, which
+    live only inside the retrieval service's response.
+    """
+    return RankedTrial(
+        rank=rank,
+        score=row.final_score if row.final_score is not None else 0.0,
+        candidate=TrialCandidate(
+            nct_id=row.nct_id,
+            title=trial.title if trial is not None else "",
+            conditions=list(trial.conditions or []) if trial is not None else [],
+            interventions=list(trial.interventions or []) if trial is not None else [],
+            phase=trial.phase if trial is not None else None,
+            status=trial.status if trial is not None else None,
+            min_age_years=trial.min_age_years if trial is not None else None,
+            max_age_years=trial.max_age_years if trial is not None else None,
+            sex=cast("Sex | None", trial.sex) if trial is not None else None,
+            rrf_score=row.rrf_score,
+            rerank_score=row.rerank_score,
+            retrieval_rank=(
+                row.retrieval_rank
+                if row.retrieval_rank is not None and row.retrieval_rank >= 1
+                else None
+            ),
+        ),
+        judgment=TrialJudgment(
+            nct_id=row.nct_id,
+            judgments=[
+                CriterionJudgment(
+                    criterion_id=j.criterion_id,
+                    kind=cast("CriterionKind", j.kind),
+                    label=cast("CriterionLabel", j.label),
+                    evidence_sentence_ids=list(j.evidence_sentence_ids or []),
+                    explanation=j.explanation or "",
+                )
+                for j in judged
+            ],
+            category=(
+                cast("EligibilityCategory", row.category)
+                if row.category is not None
+                else "insufficient_info"
+            ),
+            confirmed_fraction=(
+                row.confirmed_fraction if row.confirmed_fraction is not None else 0.0
+            ),
+            missing_facts=list(row.missing_facts or []),
+            summary=row.summary,
+        ),
+    )
+
+
+@router.get("/v1/matches/{match_id}", response_model=MatchResult)
+async def get_match(match_id: str, maker: SessionmakerDep) -> MatchResult:
+    """The whole answer for one run, readable at any time and any number of times.
+
+    This is the route ``POST /v1/matches`` has always advertised in its
+    ``Location`` header. Without it the only copy of a finished run's results
+    was the ``completed`` SSE frame, which is delivered once, to whoever
+    happened to be connected: reload the page and the answer was gone, even
+    though every row of it was sitting in Postgres.
+
+    Returning the note alongside the results is the point as much as the
+    results are. ``evidence_sentence_ids`` index ``note.sentences``, so a
+    client that renders cited evidence cannot do it from ``results`` alone.
+
+    Five round trips, independent of the number of trials: the run, the
+    patient, the pairs, their trials in one ``IN``, and all judgments for the
+    run in one query, grouped in memory. Deliberately not a per-trial loop.
+    """
+    async with maker() as session:
+        run = await session.get(MatchRun, match_id)
+        if run is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"No match run {match_id!r}")
+
+        patient = await session.get(Patient, run.patient_id) if run.patient_id else None
+
+        pairs = list(
+            (await session.execute(select(TrialMatch).where(TrialMatch.match_run_id == match_id)))
+            .scalars()
+            .all()
+        )
+
+        trials: dict[str, Trial] = {}
+        judged: dict[str, list[CriterionJudgmentRow]] = {}
+        if pairs:
+            trials = {
+                t.nct_id: t
+                for t in (
+                    await session.execute(
+                        select(Trial).where(Trial.nct_id.in_([p.nct_id for p in pairs]))
+                    )
+                )
+                .scalars()
+                .all()
+            }
+            judgment_rows = (
+                (
+                    await session.execute(
+                        select(CriterionJudgmentRow)
+                        .where(CriterionJudgmentRow.match_run_id == match_id)
+                        .order_by(CriterionJudgmentRow.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for j in judgment_rows:
+                judged.setdefault(j.nct_id, []).append(j)
+
+    results = [
+        _to_ranked_trial(rank, row, trials.get(row.nct_id), judged.get(row.nct_id, []))
+        for rank, row in _rank_rows(pairs)
+    ]
+
+    note: NumberedNote | None = None
+    profile: PatientProfile | None = None
+    if patient is not None:
+        if patient.sentences:
+            note = NumberedNote.model_validate({"sentences": patient.sentences})
+        if patient.profile:
+            profile = PatientProfile.model_validate(patient.profile)
+
+    return MatchResult(
+        match_id=match_id,
+        status=cast("MatchStatus", run.status),
+        current_step=cast("PipelineStep | None", run.current_step),
+        note=note,
+        profile=profile,
+        results=results,
+        trial_count=len(results),
+        total_cost_usd=run.total_cost_usd,
+        duration_ms=run.duration_ms,
+        error=run.error,
     )
 
 
