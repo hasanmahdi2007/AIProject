@@ -1,6 +1,8 @@
 node_modules/
 .next/
 out/
+# Throwaway CommonJS build that `npm run verify` compiles src/ into.
+.verify/
 next-env.d.ts
 *.tsbuildinfo
 .env*.local
