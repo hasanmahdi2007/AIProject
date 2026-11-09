@@ -209,10 +209,12 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
             if batches % config.progress_every == 0:
                 elapsed = time.monotonic() - started
                 rate = written / elapsed if elapsed else 0.0
-                remaining = (config.limit or EXPECTED_TRIAL_COUNT) - stats.trials
+                # Skipped records are already past, so they count towards
+                # progress; only derived ones count towards the rate.
+                remaining = (config.limit or EXPECTED_TRIAL_COUNT) - stats.trials - skipped
                 logger.info(
                     "ingest.progress",
-                    scanned=stats.trials,
+                    scanned=stats.trials + skipped,
                     written=written,
                     skipped=skipped,
                     errors=errors,

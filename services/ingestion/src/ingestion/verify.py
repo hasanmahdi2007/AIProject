@@ -34,7 +34,7 @@ from beacon_core.db import dispose_engine, session_scope
 from beacon_core.models import Trial
 from beacon_core.settings import Settings, get_settings
 from ingestion import store
-from ingestion.corpus import EXPECTED_TRIAL_COUNT
+from ingestion.corpus import EXPECTED_TRIAL_COUNT, read_trial_xml
 from ingestion.store import QdrantIndex, point_id
 
 __all__ = ["main", "verify"]
@@ -95,6 +95,49 @@ def _compare(row: Any, payload: dict[str, Any]) -> list[str]:
     return out
 
 
+PENDING_SAMPLE = 20
+"""How many ``indexed_at IS NULL`` rows to name when the counts disagree."""
+
+
+async def _explain_pending() -> None:
+    """Name the rows Qdrant has not confirmed, and say where they came from.
+
+    A row with ``indexed_at IS NULL`` has two very different causes, and
+    telling them apart by hand is tedious:
+
+    * an ingest was interrupted between the Postgres write and the Qdrant
+      upsert -- the divergence this marker exists to expose, fixed by
+      re-running;
+    * the row was never ours. ``trials`` is a shared table on a shared
+      Postgres, and another agent seeding retrieval fixtures leaves rows that
+      this pipeline will never index because they are not in the corpus.
+
+    Checking each id against the cached archives separates the two, so a real
+    divergence is not written off as somebody else's test data, or the reverse.
+    """
+    async with session_scope() as session:
+        pending = list(
+            (
+                await session.execute(
+                    select(Trial.nct_id)
+                    .where(Trial.indexed_at.is_(None))
+                    .order_by(Trial.nct_id)
+                    .limit(PENDING_SAMPLE)
+                )
+            ).scalars()
+        )
+    if not pending:
+        return
+    print(f"\n  rows awaiting a Qdrant point (first {len(pending)}):")
+    for nct_id in pending:
+        try:
+            read_trial_xml(nct_id)
+            origin = "in the TREC corpus -- re-run the ingest to index it"
+        except KeyError:
+            origin = "NOT in the TREC corpus -- not written by this pipeline"
+        print(f"    {nct_id}  {origin}")
+
+
 async def verify(
     *, hand_check: int = 0, nct_ids: list[str] | None = None, settings: Settings | None = None
 ) -> int:
@@ -133,6 +176,9 @@ async def verify(
             ok = left == right
             problems += 0 if ok else 1
             print(f"{label:<26}: {left} vs {right}  {'OK' if ok else 'MISMATCH'}")
+
+        if total != indexed:
+            await _explain_pending()
 
         if hand_check or nct_ids:
             chosen = nct_ids
