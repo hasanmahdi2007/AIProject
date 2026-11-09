@@ -156,6 +156,28 @@ class AnthropicSettings(BaseSettings):
     # Verified against platform.claude.com on 2026-11-07.
     cheap_model: str = "claude-haiku-5-5"
     headline_model: str = "claude-sonnet-5-5"
+    decision_model: str = "claude-sonnet-5-5"
+    """The model for ``check_rules`` - the eligibility decision itself.
+
+    Everything else in the pipeline runs on ``cheap_model`` (Haiku 5.5):
+    profiling the note, generating queries, verifying a citation, writing the
+    summary. Those are extraction and paraphrase, where a bigger model buys
+    little. ``check_rules`` is the one step whose output *is* the product, so
+    it gets Sonnet 5.5. Set on Hasan's instruction, 9 Nov: "do everything with
+    haiku except the final decision, leave it for sonnet".
+
+    **Know the cost before changing this.** ``check_rules`` is about 95% of all
+    token spend, because it runs once per candidate trial - twenty calls per
+    patient against one for every other node. Sonnet input is 20x Haiku, so
+    this choice is most of the bill:
+
+    * all-Haiku:  roughly $0.025 per patient, about $3 for all 125 topics
+    * Sonnet here: roughly $0.20 per patient, about $25 for all 125 topics
+
+    Point it at ``claude-haiku-5-5`` for cheap iteration and back at Sonnet for
+    the headline run. That swap is this one config value, not a code change,
+    which is the entire reason it lives here."""
+
     judge_model: str = "claude-opus-5-5"
     """The judge must differ from the model being judged, or it is grading
     itself. The headline run is Sonnet 5.5, so the judge is Opus 5.5."""

@@ -47,15 +47,31 @@ class RunContext:
 
     @property
     def model(self) -> str:
-        """``cheap_model`` for every node by default - Haiku 5.5.
+        """``cheap_model`` - Haiku 5.5 - for every node except the decision.
 
-        A node that needs more thinking raises ``effort``, not the model: the
-        rule check is a short judgement over a short text, and the thing that
-        actually improves it is the prompt, not a bigger model. The ablation
-        that swaps the model is a config change in the eval harness, not a
-        branch in a node.
+        Profiling a note, generating queries, verifying a citation and writing
+        the summary are extraction and paraphrase, where a bigger model buys
+        little and effort is the better knob.
+
+        ``check_rules`` is the exception and uses :meth:`decision_model`: its
+        output *is* the product. See that method for why the split is worth the
+        money and what it costs.
         """
         return self.llm.model or self.settings.anthropic.cheap_model
+
+    @property
+    def decision_model(self) -> str:
+        """The model for ``check_rules``, the eligibility decision - Sonnet 5.5.
+
+        An explicit ``llm.model`` override still wins, so a test or an ablation
+        that pins one model pins it everywhere and does not silently pay for
+        Sonnet.
+
+        This is about 95% of token spend, since it runs once per candidate
+        trial - twenty calls per patient against one for every other node.
+        Switch ``anthropic.decision_model`` to Haiku for cheap iteration.
+        """
+        return self.llm.model or self.settings.anthropic.decision_model
 
 
 def to_config(

@@ -493,6 +493,11 @@ async def check_rules(payload: dict[str, Any], config: RunnableConfig) -> dict[s
                 step="check_rules",
                 prompt=prompt,
                 output_model=TrialRuleCheck,
+                # The one node that does not run on cheap_model. Its output is
+                # the product, so it gets settings.anthropic.decision_model
+                # (Sonnet 5.5). An explicit llm.model override still wins, so
+                # an ablation pinning one model does not silently pay for it.
+                model=ctx.decision_model,
                 effort="high",
             ),
             policy=policy,

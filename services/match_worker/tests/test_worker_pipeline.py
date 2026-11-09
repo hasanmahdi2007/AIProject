@@ -138,8 +138,19 @@ async def test_the_seven_nodes_run_and_persist_a_complete_answer(tmp_path: Path)
     # on httpx2, which respx does not intercept, so an respx-based assertion
     # about Claude would pass while proving nothing. Replay reads a file.)
     assert worker.llm_client._client is None  # type: ignore[attr-defined]
-    # Every call stayed under the Haiku pricing cliff, where rates jump 5x.
-    assert all(row["billed_tier"] == "haiku_base" for row in store.llm_calls)
+    # The per-step cost model, pinned so it cannot drift silently: Haiku
+    # everywhere except the eligibility decision, which runs on Sonnet because
+    # its output is the product rather than a paraphrase of one.
+    # "standard" is Sonnet's tier; "haiku_base" is Haiku under the 100K prompt
+    # cliff, where its rates jump 5x.
+    by_step = {row["step"]: row["billed_tier"] for row in store.llm_calls}
+    assert by_step["check_rules"] == "standard", "the decision must run on Sonnet"
+    assert all(
+        row["billed_tier"] == "haiku_base"
+        for row in store.llm_calls
+        if row["step"] != "check_rules"
+    ), "every other step stays on Haiku, under the pricing cliff"
+    assert "check_rules" in by_step, "the decision step must actually have run"
 
 
 @respx.mock
@@ -322,6 +333,10 @@ async def test_a_budget_breach_returns_partial_results_clearly_marked(
     _stub_retrieval()
     store = InMemoryStore.seeded()
     # Enough for the two per-match calls and the first trial, not for all three.
+    # Sized against the *decision* model, not the cheap one: check_rules runs on
+    # Sonnet, which is roughly 20x Haiku's input price, so a cap calibrated for
+    # an all-Haiku pipeline would be spent before the first trial was judged and
+    # this test would stop proving anything about partial results.
     worker = _worker(
         store,
         tmp_path,
@@ -329,7 +344,7 @@ async def test_a_budget_breach_returns_partial_results_clearly_marked(
             explain_top_k=0,
             relay_enabled=False,
             verify_with_llm=False,
-            max_cost_usd=0.0009,
+            max_cost_usd=0.009,
         ),
     )
 
@@ -347,7 +362,9 @@ async def test_a_budget_breach_returns_partial_results_clearly_marked(
     assert skipped, "the breach must leave a visible mark on the trials it skipped"
     # Every trial still has a row: a skipped trial is reported, not dropped.
     assert len(store.trial_matches) == len(TRIALS)
-    assert outcome.cost_usd <= 0.0009 * 1.5
+    # The breach stops the run promptly: at most one trial's worth of overshoot
+    # past the cap, never a run that quietly spends several times its budget.
+    assert outcome.cost_usd <= 0.009 * 1.5
 
 
 # ---------------------------------------------------- redelivery and the DLQ --
