@@ -188,20 +188,36 @@ export interface MatchDoneEvent {
 }
 
 /**
- * Everything one finished run needs to be *displayed*.
+ * Body of `GET /v1/matches/{match_id}`, i.e. `gateway.schemas.MatchResult`.
  *
- * `MatchCompleted` carries `results` only. The numbered note and the patient
- * profile are produced by the worker and stored in Postgres, but as of the
- * merged gateway no route returns them, so the console treats both as optional
- * and says so on screen when they are absent rather than re-deriving them.
- * See `docs`/the C4 PR for the precise gap.
+ * This is the console's source of truth for a run's answer. The `completed`
+ * SSE frame is an optimisation: it arrives once, to whoever is connected, and
+ * carries no note, so it cannot be the thing the evidence highlight is drawn
+ * from. This route is a plain GET and can be read any number of times.
+ *
+ * `note` is `null`, not an empty `NumberedNote`, when the worker has not split
+ * the note yet. The distinction matters: a null note is a *not yet*, whereas a
+ * note that exists and lacks a cited sentence id is a real citation defect.
+ * Nothing in the console may collapse the two.
  */
-export interface MatchResultBundle {
+export interface MatchResult {
   match_id: string;
   status: MatchStatus;
+  current_step: PipelineStep | null;
+  note: NumberedNote | null;
+  profile: PatientProfile | null;
   results: RankedTrial[];
-  note?: NumberedNote;
-  profile?: PatientProfile;
-  total_cost_usd?: number;
-  duration_ms?: number;
+  /** Row count of `results`, so a client can assert it got them all. */
+  trial_count: number;
+  total_cost_usd: number;
+  duration_ms: number | null;
+  /** Set only when `status === "failed"`. */
+  error: string | null;
+}
+
+/** `status` values after which no further event or re-read can change a run. */
+export const TERMINAL_STATUSES: readonly MatchStatus[] = ["completed", "failed"];
+
+export function isTerminal(status: MatchStatus): boolean {
+  return TERMINAL_STATUSES.includes(status);
 }

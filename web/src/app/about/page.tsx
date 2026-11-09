@@ -107,8 +107,11 @@ export default function AboutPage() {
           ))}
         </ol>
         <p className="max-w-3xl text-sm leading-6 text-slate-700">
-          Submitting a note returns immediately with a match id; the answer
-          arrives over a server-sent event stream as the pipeline advances.
+          Submitting a note returns immediately with a match id; progress
+          arrives over a server-sent event stream as the pipeline advances. The
+          match id is the durable handle on the answer — the console reads the
+          finished run back by id, so a reload, a late connect or a second
+          person opening the same id all get the same result.
         </p>
       </section>
 

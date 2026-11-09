@@ -39,7 +39,7 @@ function List({ label, values }: { label: string; values: string[] }) {
  * note", never filled in or inferred: in this system an unknown is a real
  * value, and it is what the missing-facts lists are built out of.
  */
-export function ProfileCard({ profile }: { profile: PatientProfile | undefined }) {
+export function ProfileCard({ profile }: { profile: PatientProfile | null }) {
   if (!profile) {
     return (
       <section className="rounded-lg border border-slate-200 bg-white p-4">
@@ -47,7 +47,8 @@ export function ProfileCard({ profile }: { profile: PatientProfile | undefined }
           Patient summary
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          This run did not return a structured profile.
+          No structured profile yet — the run has not finished profiling the
+          note. Nothing is wrong with the run.
         </p>
       </section>
     );

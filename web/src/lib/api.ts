@@ -15,6 +15,7 @@ import type {
   MatchDoneEvent,
   MatchErrorEvent,
   MatchProgressEvent,
+  MatchResult,
   MatchStatusSnapshot,
 } from "./types";
 
@@ -44,6 +45,42 @@ export async function createMatch(patientNote: string): Promise<MatchAccepted> {
     );
   }
   return (await response.json()) as MatchAccepted;
+}
+
+/** Thrown for a 404, which means "no such run" and never "no trials matched". */
+export class MatchNotFoundError extends Error {
+  constructor(matchId: string) {
+    super(`No match run ${matchId}. Check the id; nothing was matched or lost.`);
+    this.name = "MatchNotFoundError";
+  }
+}
+
+/**
+ * Reads one run's whole answer: `GET /v1/matches/{match_id}`.
+ *
+ * A plain, repeatable GET and the console's source of truth. Unlike the
+ * `completed` SSE frame it carries `note` and `profile`, which is what makes
+ * the evidence highlight possible at all: `evidence_sentence_ids` index
+ * `note.sentences`, so the two must be read from the same response.
+ *
+ * A 404 is distinguished from every other failure because the two must render
+ * differently: an unknown id is "no such run", whereas an empty `results` on a
+ * 200 is a real run that has matched nothing yet.
+ */
+export async function getMatchResult(matchId: string): Promise<MatchResult> {
+  const response = await fetch(
+    `${GATEWAY_BASE}/v1/matches/${encodeURIComponent(matchId)}`,
+    { headers: { Accept: "application/json" }, cache: "no-store" },
+  );
+
+  if (response.status === 404) throw new MatchNotFoundError(matchId);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `GET /v1/matches/${matchId} returned ${response.status}: ${detail.slice(0, 400)}`,
+    );
+  }
+  return (await response.json()) as MatchResult;
 }
 
 /**

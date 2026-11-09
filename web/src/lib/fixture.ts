@@ -14,12 +14,17 @@
  *   - one rule cites two sentences, so multi-sentence highlighting is visible;
  *   - three of the four `EligibilityCategory` values appear.
  *
+ * `dense_score` and `sparse_score` are `null` on every candidate because the
+ * gateway can never populate them: `trial_matches` persists only the fused and
+ * reranked scores. A fixture that filled them in would let the console grow a
+ * dependency on a field live data never has.
+ *
  * The patient is synthetic. It is not a real person and never was.
  */
 
 import type {
-  MatchResultBundle,
   MatchProgressEvent,
+  MatchResult,
   NumberedNote,
   PatientProfile,
   RankedTrial,
@@ -116,8 +121,8 @@ const TRIALS: RankedTrial[] = [
       min_age_years: 18,
       max_age_years: null,
       sex: "all",
-      dense_score: 0.834,
-      sparse_score: 12.41,
+      dense_score: null,
+      sparse_score: null,
       rrf_score: 0.0317,
       rerank_score: 0.912,
       retrieval_rank: 1,
@@ -206,8 +211,8 @@ const TRIALS: RankedTrial[] = [
       min_age_years: 18,
       max_age_years: 85,
       sex: "all",
-      dense_score: 0.771,
-      sparse_score: 9.07,
+      dense_score: null,
+      sparse_score: null,
       rrf_score: 0.0294,
       rerank_score: 0.617,
       retrieval_rank: 3,
@@ -289,8 +294,8 @@ const TRIALS: RankedTrial[] = [
       min_age_years: 18,
       max_age_years: null,
       sex: "all",
-      dense_score: 0.688,
-      sparse_score: 7.52,
+      dense_score: null,
+      sparse_score: null,
       rrf_score: 0.0241,
       rerank_score: 0.208,
       retrieval_rank: 7,
@@ -340,14 +345,18 @@ const TRIALS: RankedTrial[] = [
   },
 ];
 
-export const FIXTURE_BUNDLE: MatchResultBundle = {
+/** Shaped exactly like a `GET /v1/matches/{match_id}` body. */
+export const FIXTURE_RESULT: MatchResult = {
   match_id: FIXTURE_MATCH_ID,
   status: "completed",
-  results: TRIALS,
+  current_step: null,
   note: FIXTURE_NOTE,
   profile: FIXTURE_PROFILE,
+  results: TRIALS,
+  trial_count: TRIALS.length,
   total_cost_usd: 0.0412,
   duration_ms: 18420,
+  error: null,
 };
 
 /**
