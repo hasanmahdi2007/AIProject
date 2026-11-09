@@ -28,7 +28,9 @@ import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from beacon_core.db import dispose_engine, session_scope
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from beacon_core.db import dispose_engine, get_sessionmaker
 from beacon_core.logging import get_logger
 from beacon_core.settings import Settings, get_settings
 from ingestion import store
@@ -87,16 +89,23 @@ async def _write_batch(
     batch: Sequence[DerivedTrial],
     encoder: Encoder,
     index: QdrantIndex,
+    sessions: async_sessionmaker[AsyncSession],
     *,
     embed_batch: int,
     criteria_for: Sequence[DerivedTrial],
 ) -> None:
-    """One batch through the dual write: Postgres, then Qdrant, then the marker."""
+    """One batch through the dual write: Postgres, then Qdrant, then the marker.
+
+    ``sessions.begin()`` is the same transaction boundary as
+    ``beacon_core.db.session_scope`` -- commit on success, roll back on any
+    exception -- but taken from the sessionmaker the caller supplies rather
+    than from the process-wide cached one. See :func:`ingest`.
+    """
     texts = [d.overview.text for d in batch]
     dense, sparse = encoder.encode(texts, batch_size=embed_batch)
 
     # 1. Postgres first. The row exists but is not yet claimed to be indexed.
-    async with session_scope() as session:
+    async with sessions.begin() as session:
         await store.upsert_trials(session, [d.trial_row() for d in batch])
         if criteria_for:
             criteria = [c for d in criteria_for for c in d.criteria]
@@ -118,11 +127,16 @@ async def _write_batch(
     )
 
     # 3. Only now do both stores hold the trial.
-    async with session_scope() as session:
+    async with sessions.begin() as session:
         await store.mark_indexed(session, [d.nct_id for d in batch])
 
 
-async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestStats:
+async def ingest(
+    config: RunConfig,
+    settings: Settings | None = None,
+    *,
+    sessions: async_sessionmaker[AsyncSession] | None = None,
+) -> IngestStats:
     """Run the ingest and return the measurements.
 
     The returned :class:`IngestStats` covers the records this run **processed**
@@ -130,8 +144,24 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
     ``skipped`` but not derived, so they contribute no statistics. A full first
     run therefore reports corpus-wide rates; a resumed run reports the rates of
     the remainder, and ``--force`` or ``--dry-run`` re-measures everything.
+
+    Args:
+        config: what to read and how to batch it.
+        settings: overrides the process-wide settings.
+        sessions: a sessionmaker to use instead of the process-wide cached one.
+            This exists for the integration tests, and it is not optional
+            there: ``beacon_core.db`` caches one engine per process, asyncpg
+            connections are bound to the event loop that opened them, and
+            ``asyncio_default_fixture_loop_scope = "function"`` gives every
+            test a fresh loop. A second test reusing the cached pool therefore
+            fails with *"got Future attached to a different loop"*. Injecting a
+            per-test sessionmaker removes the shared state rather than working
+            around it. When this is given, the engine behind it belongs to the
+            caller and is not disposed here.
     """
     cfg = settings or get_settings()
+    maker = sessions or get_sessionmaker()
+    owns_engine = sessions is None
     stats = IngestStats()
     started = time.monotonic()
 
@@ -159,7 +189,7 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
 
         already: set[str] = set()
         if not config.force and not config.dry_run:
-            async with session_scope() as session:
+            async with maker.begin() as session:
                 already = await store.indexed_nct_ids(session)
             logger.info("ingest.resume", already_indexed=len(already))
 
@@ -202,6 +232,7 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
                     batch,
                     encoder,
                     index,
+                    maker,
                     embed_batch=config.embed_batch,
                     criteria_for=batch[:take],
                 )
@@ -234,7 +265,7 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
         )
         if not config.dry_run:
             summary["qdrant_points"] = await index.count()
-            async with session_scope() as session:
+            async with maker.begin() as session:
                 summary["pg_trials"] = await store.count_trials(session)
                 summary["pg_trials_indexed"] = await store.count_trials(session, indexed_only=True)
                 summary["pg_criteria"] = await store.count_criteria(session)
@@ -242,7 +273,8 @@ async def ingest(config: RunConfig, settings: Settings | None = None) -> IngestS
         return stats
     finally:
         await index.close()
-        await dispose_engine()
+        if owns_engine:
+            await dispose_engine()
 
 
 def _criteria_limit(value: str) -> int | None:

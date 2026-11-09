@@ -3,7 +3,7 @@
 The XML below is trimmed from the real ``NCT00000105.xml`` -- same elements,
 same nesting, same ``&#xD;`` line endings inside the textblocks -- so it tests
 the parser against the structure the archives actually hold without needing the
-2.6 GB cache. The tests that do read the cache are marked ``integration``.
+2.6 GB cache, which CI does not have.
 """
 
 from __future__ import annotations
@@ -181,34 +181,6 @@ def test_expected_count_matches_the_dataset_metadata() -> None:
     assert EXPECTED_TRIAL_COUNT == 375_580
 
 
-# --- against the real cache -------------------------------------------------
-
-
-@pytest.mark.integration
-def test_reads_real_records_from_the_cached_archives() -> None:
-    trials = list(iter_raw_trials(limit=5))
-    assert len(trials) == 5
-    assert trials[0].nct_id == "NCT00000102"
-    assert all(t.nct_id.startswith("NCT") for t in trials)
-    assert all(t.title for t in trials)
-
-
-@pytest.mark.integration
-def test_skip_is_reproducible() -> None:
-    first_three = [t.nct_id for t in iter_raw_trials(limit=3)]
-    skipped = [t.nct_id for t in iter_raw_trials(skip=1, limit=2)]
-    assert skipped == first_three[1:]
-
-
-@pytest.mark.integration
-def test_cross_check_against_ir_datasets() -> None:
-    """The XML reading and ``evals.trec`` must agree on what they share."""
-    from ingestion.corpus import cross_check_against_ir_datasets
-
-    counts = cross_check_against_ir_datasets(sample=200)
-    assert counts["checked"] == 200
-    assert counts["id_mismatch"] == 0
-    assert counts["title_mismatch"] == 0
-    assert counts["eligibility_mismatch"] == 0
-    # ...and disagree exactly where ir_datasets drops data.
-    assert counts["irds_condition_empty"] > 0
+# The tests that actually read the 2.6 GB cache are in test_ingest_live.py,
+# behind a fixture that skips when the archives are absent -- CI has no
+# corpus, and a test that cannot run here must skip, not fail.

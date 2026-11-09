@@ -4,7 +4,7 @@ Both failures these tests exist for are silent. A collection built without
 ``modifier: IDF`` serves every query without complaint and merely ranks badly;
 a random point id doubles the collection on every run and raises nothing. So
 they are checked here against a recording stub, and again against the live
-stack under the ``integration`` marker.
+stack in test_ingest_live.py.
 """
 
 from __future__ import annotations
@@ -205,86 +205,6 @@ async def test_upserting_nothing_is_a_no_op() -> None:
     assert await index.upsert([]) == 0
 
 
-# --- against the live stack -------------------------------------------------
-
-
-@pytest.mark.integration
-async def test_live_collection_declares_idf() -> None:
-    """The real ``trials`` collection, on the compose stack's Qdrant."""
-    from beacon_core.settings import get_settings
-
-    index = QdrantIndex(get_settings().qdrant)
-    try:
-        info = await index.info()
-        sparse = (info.config.params.sparse_vectors or {})["sparse"]
-        assert sparse.modifier == models.Modifier.IDF
-        dense = (info.config.params.vectors or {})["dense"]  # type: ignore[index]
-        assert dense.size == 384
-        assert {"min_age_years", "max_age_years", "sex"} <= set(info.payload_schema or {})
-    finally:
-        await index.close()
-
-
-@pytest.mark.integration
-async def test_live_postgres_stores_unparseable_age_as_null() -> None:
-    """Round-trip proof, not just a parser assertion.
-
-    Writes a trial whose stated minimum age is ``"65 Years and older"`` and
-    reads the column straight back out of Postgres. ``None`` here is the
-    database's ``NULL``.
-    """
-    from sqlalchemy import delete, select
-
-    from beacon_core.db import session_scope
-    from beacon_core.models import Trial
-    from ingestion.corpus import RawTrial
-    from ingestion.overview import OverviewBuilder
-    from ingestion.pipeline import derive_trial
-    from ingestion.store import upsert_trials
-
-    nct_id = "NCT09999991"
-    raw = RawTrial(
-        nct_id=nct_id,
-        title="Null Age Round Trip",
-        conditions=("Hypertension",),
-        interventions=(),
-        phase=None,
-        status="Recruiting",
-        brief_summary=None,
-        detailed_description=None,
-        eligibility_text=None,
-        raw_gender="Nonbinary",
-        raw_min_age="65 Years and older",
-        raw_max_age="N/A",
-    )
-    derived = derive_trial(raw, OverviewBuilder(WordTokenizerStub(), max_tokens=512))
-    try:
-        async with session_scope() as session:
-            await upsert_trials(session, [derived.trial_row()])
-        async with session_scope() as session:
-            row = (
-                await session.execute(
-                    select(
-                        Trial.min_age_years,
-                        Trial.max_age_years,
-                        Trial.sex,
-                        Trial.raw_min_age,
-                    ).where(Trial.nct_id == nct_id)
-                )
-            ).one()
-        assert row.min_age_years is None
-        assert row.max_age_years is None
-        assert row.sex is None
-        assert row.raw_min_age == "65 Years and older"
-    finally:
-        async with session_scope() as session:
-            await session.execute(delete(Trial).where(Trial.nct_id == nct_id))
-
-
-class WordTokenizerStub:
-    """Local alias so the integration test needs no cross-module import."""
-
-    def encode(self, text: str) -> Any:
-        from ingestion._testing import WordTokenizer
-
-        return WordTokenizer().encode(text)
+# The live-stack counterparts of these checks are in test_ingest_live.py,
+# where the skip fixtures live: a stub can only prove the client sent
+# modifier: IDF, not that the server kept it.
