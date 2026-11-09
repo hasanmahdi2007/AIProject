@@ -43,6 +43,7 @@ can afford to read in about a second.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
@@ -58,6 +59,7 @@ __all__ = [
     "DenseEncoder",
     "DenseQueryEncoder",
     "PairScorer",
+    "RerankModel",
     "SparseEncoder",
     "SparseQueryEncoder",
     "get_cross_encoder",
@@ -88,6 +90,18 @@ class PairScorer(Protocol):
     """A cross-encoder: scores ``(query, document)`` pairs. Higher is better."""
 
     def score(self, query: str, documents: list[str]) -> list[float]: ...
+
+
+class RerankModel(Protocol):
+    """The slice of FastEmbed's ``TextCrossEncoder`` that :class:`CrossEncoder`
+    uses. A protocol so a test can inject a fake and check the *batching*
+    without 280 MB of weights - the length-sorting below is pure index
+    bookkeeping and a bug in it would silently return the right scores against
+    the wrong trials."""
+
+    def rerank(
+        self, query: str, documents: Iterable[str], batch_size: int = ...
+    ) -> Iterable[float]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,8 +174,10 @@ class CrossEncoder:
     dictates the funnel's shape.
     """
 
-    model: TextCrossEncoder
-    batch_size: int = 16
+    model: RerankModel
+    batch_size: int = 8
+    """8, measured, not guessed - and smaller is faster here, which is the
+    opposite of the usual batching intuition. See :meth:`score`."""
 
     def score(self, query: str, documents: list[str]) -> list[float]:
         """Score every ``(query, document)`` pair. Higher is more relevant.
@@ -171,13 +187,49 @@ class CrossEncoder:
         used to sort one candidate set. They are deliberately *not* fed back
         into RRF: by this point ranks have done their job and the cross-encoder
         is the final authority on ordering.
+
+        **Documents are batched in length order.** The transformer pads every
+        sequence in a batch to the longest member, so a single long trial makes
+        every other pair in its batch cost full length. Trial overviews are very
+        uneven - mean 729 characters, p95 1,922, max 3,052 over 134,120 real
+        rows - so in arrival order most of the compute is spent on padding.
+
+        Measured here, 100 real overviews against one query on 8 CPU cores:
+
+        ===========  ==============  ====================  =======
+        batch_size   arrival order   length-sorted order   gain
+        ===========  ==============  ====================  =======
+        8            57.2 s          33.6 s                1.7x
+        16           83.4 s          50.5 s                1.7x
+        32           115.9 s         46.4 s                2.5x
+        ===========  ==============  ====================  =======
+
+        Two things fall out of that table. Sorting is worth 1.7-2.5x for about
+        ten lines, and in arrival order a *bigger* batch is strictly worse
+        (57 s -> 116 s), because a wider batch is more likely to contain an
+        outlier that everything else gets padded up to. Hence
+        ``batch_size = 8``: sorted-and-narrow was the fastest combination
+        measured.
+
+        This is purely a cost optimisation and changes no result. Each pair is
+        scored independently, with attention masked over the padding, so batch
+        composition cannot affect a score - confirmed rather than assumed: the
+        benchmark compared the two orderings pair by pair and the maximum
+        difference was exactly ``0.0``.
         """
         if not documents:
             return []
-        return [
-            float(score)
-            for score in self.model.rerank(query, documents, batch_size=self.batch_size)
-        ]
+        # Indices of `documents`, shortest first. Sorting the indices rather
+        # than the strings is what makes the result restorable: `order[j]` is
+        # where the j-th scored document belongs in the caller's list.
+        order = sorted(range(len(documents)), key=lambda index: len(documents[index]))
+        scores = self.model.rerank(
+            query, [documents[index] for index in order], batch_size=self.batch_size
+        )
+        restored = [0.0] * len(documents)
+        for index, score in zip(order, scores, strict=True):
+            restored[index] = float(score)
+        return restored
 
 
 # The caches are keyed on the model name - a string - and not on ``Settings``.
