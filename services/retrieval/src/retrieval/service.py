@@ -40,7 +40,7 @@ import structlog
 from beacon_core.schemas import RankedQuery, SearchRequest, SearchResponse, Sex, TrialCandidate
 from beacon_core.settings import Settings
 from retrieval.collection import CollectionReport, verify_collection
-from retrieval.encoders import CrossEncoder
+from retrieval.encoders import PairScorer
 from retrieval.filters import build_filter
 from retrieval.fusion import fuse_across_queries, fuse_hybrid, rank_ids
 from retrieval.hydrate import TrialText, TrialTextStore, rerank_document
@@ -148,7 +148,7 @@ class RetrievalService:
         *,
         searcher: HybridSearcher,
         text_store: TrialTextStore,
-        cross_encoder: CrossEncoder | None,
+        cross_encoder: PairScorer | None,
         settings: Settings,
         hnsw_ef: int | None = None,
     ) -> None:

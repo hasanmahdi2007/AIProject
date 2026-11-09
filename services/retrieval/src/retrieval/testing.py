@@ -34,7 +34,12 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from fastembed import SparseTextEmbedding, TextEmbedding
+from fastembed.common.model_description import BaseModelDescription
+from fastembed.common.utils import define_cache_dir
+from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.conversions.common_types import QueryResponse
 
 from beacon_core.schemas import Sex
 from beacon_core.settings import QdrantSettings
@@ -42,14 +47,22 @@ from retrieval.hydrate import TrialText
 
 __all__ = [
     "FixtureTrial",
+    "INTEGRATION_HINT",
     "SCALE_FILTER_AGE",
     "SCALE_SELECTIVITY",
     "SEMANTIC_TRIALS",
+    "StubCrossEncoder",
+    "StubDenseEncoder",
+    "StubQdrantClient",
+    "StubSparseEncoder",
     "create_scale_collection",
     "create_semantic_collection",
+    "missing_models",
     "point_id",
     "semantic_text_store",
 ]
+
+INTEGRATION_HINT = "Start the stack: docker compose -f deploy/compose.yaml up -d --wait"
 
 SCALE_FILTER_AGE = 45
 """The patient age the scale fixture is tuned around."""
@@ -573,3 +586,218 @@ async def create_scale_collection(
         await client.upsert(collection_name=name, points=points[start : start + 200], wait=True)
 
     return sum(1 for point in points if (point.payload or {})["min_age_years"] == 18.0)
+
+
+# --------------------------------------------------------------------------
+# Test doubles. The unit suite must pass with no containers and no ONNX
+# weights, so everything the service talks to has a stub here.
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class StubDenseEncoder:
+    """A :class:`~retrieval.encoders.DenseQueryEncoder` that embeds nothing.
+
+    The vector's *content* is irrelevant to every unit test: the stub Qdrant
+    client below returns canned rankings regardless of what it is asked, so what
+    is under test is the fusion arithmetic and the request shape, not
+    similarity. Returning a fixed vector of the right length keeps the request
+    valid without loading 130 MB of weights.
+    """
+
+    dim: int = 384
+
+    def encode_query(self, text: str) -> list[float]:
+        # Not all zeros: a zero vector is degenerate for cosine, and a stub that
+        # happens to be degenerate invites a confusing failure if one ever
+        # reaches a real Qdrant.
+        return [0.1] * self.dim
+
+
+@dataclass(frozen=True, slots=True)
+class StubSparseEncoder:
+    """A :class:`~retrieval.encoders.SparseQueryEncoder` with a fixed vector."""
+
+    def encode_query(self, text: str) -> models.SparseVector:
+        return models.SparseVector(indices=[1, 2, 3], values=[1.0, 1.0, 1.0])
+
+
+@dataclass
+class StubCrossEncoder:
+    """A :class:`~retrieval.encoders.PairScorer` driven by a lookup table.
+
+    ``scores`` maps a substring of the document to the score to return, so a
+    test can say "the trial mentioning melanoma must rerank to the top" without
+    a model. Documents matching nothing score ``default``.
+    """
+
+    scores: Mapping[str, float]
+    default: float = 0.0
+    calls: list[tuple[str, int]] = field(default_factory=list)
+
+    def score(self, query: str, documents: list[str]) -> list[float]:
+        self.calls.append((query, len(documents)))
+        out: list[float] = []
+        for document in documents:
+            out.append(
+                next((v for k, v in self.scores.items() if k in document), self.default)
+            )
+        return out
+
+
+class StubQdrantClient:
+    """Returns canned ranked lists, one per request, in request order.
+
+    It is positional on purpose. :class:`~retrieval.search.HybridSearcher`
+    builds ``2N`` requests as dense, sparse, dense, sparse... and pairs the
+    responses back up by index; a stub keyed on anything else could not catch a
+    regression that transposed the two branches, which is exactly the kind of
+    bug that produces plausible-looking wrong rankings.
+
+    ``requests`` records what it was asked, so a test can assert the filter was
+    attached to *both* branches of *every* query.
+    """
+
+    def __init__(
+        self,
+        branches: Sequence[Sequence[str]] = (),
+        payloads: Mapping[str, dict[str, Any]] | None = None,
+        *,
+        info: models.CollectionInfo | None = None,
+        exists: bool = True,
+    ) -> None:
+        self.branches = [list(branch) for branch in branches]
+        self.payloads = dict(payloads or {})
+        self.requests: list[models.QueryRequest] = []
+        self.info = info
+        self.exists = exists
+
+    async def collection_exists(self, collection_name: str, **kwargs: Any) -> bool:
+        return self.exists
+
+    async def get_collection(
+        self, collection_name: str, **kwargs: Any
+    ) -> models.CollectionInfo:
+        if self.info is None:
+            raise AssertionError("StubQdrantClient was not given a CollectionInfo")
+        return self.info
+
+    async def query_batch_points(
+        self,
+        collection_name: str,
+        requests: Sequence[models.QueryRequest],
+        **kwargs: Any,
+    ) -> list[QueryResponse]:
+        self.requests.extend(requests)
+        if len(requests) != len(self.branches):
+            raise AssertionError(
+                f"stub has {len(self.branches)} canned branches but was sent "
+                f"{len(requests)} requests"
+            )
+        return [
+            QueryResponse(
+                points=[
+                    models.ScoredPoint(
+                        id=point_id(nct_id),
+                        version=0,
+                        # A descending synthetic score. RRF must not read it -
+                        # the two branches are deliberately on different scales
+                        # in the tests, so a score-based fusion would give a
+                        # different answer than the rank-based one asserted.
+                        score=float(len(branch) - position),
+                        payload=self.payloads.get(nct_id, {"nct_id": nct_id}),
+                    )
+                    for position, nct_id in enumerate(branch)
+                ]
+            )
+            for branch in self.branches
+        ]
+
+
+def stub_collection_info(
+    *,
+    dense_dim: int | None = 384,
+    dense_name: str = "dense",
+    sparse_name: str | None = "sparse",
+    sparse_modifier: models.Modifier | None = models.Modifier.IDF,
+    payload_fields: Sequence[str] = ("min_age_years", "max_age_years", "sex", "nct_id"),
+    points: int = 375_580,
+    unnamed_vector: bool = False,
+) -> models.CollectionInfo:
+    """A ``CollectionInfo`` describing a collection that may be misconfigured.
+
+    ``model_construct`` skips validation, which is what makes this possible at
+    all: a real ``CollectionInfo`` demands a full ``HnswConfig`` and
+    ``OptimizersConfig`` that the verifier never reads, and inventing them would
+    put 30 lines of irrelevant defaults between the test and what it is testing.
+    """
+    vectors: models.VectorsConfig | None
+    if unnamed_vector:
+        vectors = models.VectorParams(
+            size=dense_dim or 384, distance=models.Distance.COSINE
+        )
+    elif dense_dim is None:
+        vectors = {}
+    else:
+        vectors = {
+            dense_name: models.VectorParams(size=dense_dim, distance=models.Distance.COSINE)
+        }
+
+    sparse_vectors = (
+        None
+        if sparse_name is None
+        else {sparse_name: models.SparseVectorParams(modifier=sparse_modifier)}
+    )
+    params = models.CollectionParams(vectors=vectors, sparse_vectors=sparse_vectors)
+    return models.CollectionInfo.model_construct(
+        status=models.CollectionStatus.GREEN,
+        optimizer_status=models.OptimizersStatusOneOf.OK,
+        points_count=points,
+        segments_count=1,
+        config=models.CollectionConfig.model_construct(params=params),
+        payload_schema={
+            name: models.PayloadIndexInfo.model_construct(
+                data_type=models.PayloadSchemaType.FLOAT, points=points
+            )
+            for name in payload_fields
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# model availability, so integration tests skip instead of downloading 400 MB
+# --------------------------------------------------------------------------
+
+
+def missing_models(settings: QdrantSettings) -> list[str]:
+    """Names of the configured models whose weights are not already cached.
+
+    CI runs ``pytest -m integration`` against a live compose stack, on a fresh
+    runner with a cold FastEmbed cache. A test that constructed a real encoder
+    there would pull ~400 MB of ONNX weights - ``bge-reranker-base`` alone is
+    ~280 MB - and either blow the job's timeout or quietly turn the job into a
+    download benchmark. So the model-dependent tests consult this and skip,
+    while the tests that need only Qdrant - including the overfiltering test,
+    which uses random vectors precisely so that it needs no model - run for
+    real.
+
+    The cache directory is inspected rather than the model being loaded,
+    because attempting the load *is* the download.
+    """
+    wanted: list[tuple[str, Sequence[BaseModelDescription]]] = [
+        (settings.dense_model, TextEmbedding._list_supported_models()),
+        (settings.sparse_model, SparseTextEmbedding._list_supported_models()),
+        (settings.reranker_model, TextCrossEncoder._list_supported_models()),
+    ]
+    cache = define_cache_dir()
+    absent: list[str] = []
+    for name, supported in wanted:
+        match = next((d for d in supported if d.model.lower() == name.lower()), None)
+        if match is None:
+            absent.append(f"{name} (not a FastEmbed model)")
+            continue
+        repo = match.sources.hf
+        # huggingface_hub names a snapshot folder models--<org>--<repo>.
+        if repo is None or not (cache / f"models--{repo.replace('/', '--')}").is_dir():
+            absent.append(name)
+    return absent

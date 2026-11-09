@@ -36,10 +36,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from qdrant_client import AsyncQdrantClient, models
+from qdrant_client import models
 
 from beacon_core.settings import QdrantSettings
 from retrieval.filters import MAX_AGE_FIELD, MIN_AGE_FIELD, SEX_FIELD
+from retrieval.protocols import QdrantReader
 
 __all__ = ["CollectionReport", "CollectionVerificationError", "verify_collection"]
 
@@ -68,7 +69,7 @@ class CollectionReport:
 
 
 async def verify_collection(
-    client: AsyncQdrantClient,
+    client: QdrantReader,
     settings: QdrantSettings,
 ) -> CollectionReport:
     """Inspect the collection and report every discrepancy found.

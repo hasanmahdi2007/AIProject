@@ -52,11 +52,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from qdrant_client import AsyncQdrantClient, models
+from qdrant_client import models
 
 from beacon_core.schemas import RankedQuery
 from beacon_core.settings import QdrantSettings
-from retrieval.encoders import DenseEncoder, SparseEncoder
+from retrieval.encoders import DenseQueryEncoder, SparseQueryEncoder
+from retrieval.protocols import QdrantReader
 
 __all__ = ["EncodedQuery", "Hit", "HybridSearcher", "QueryHits"]
 
@@ -122,10 +123,10 @@ class HybridSearcher:
 
     def __init__(
         self,
-        client: AsyncQdrantClient,
+        client: QdrantReader,
         settings: QdrantSettings,
-        dense: DenseEncoder,
-        sparse: SparseEncoder,
+        dense: DenseQueryEncoder,
+        sparse: SparseQueryEncoder,
     ) -> None:
         self._client = client
         self._settings = settings
@@ -133,7 +134,7 @@ class HybridSearcher:
         self._sparse = sparse
 
     @property
-    def client(self) -> AsyncQdrantClient:
+    def client(self) -> QdrantReader:
         """Exposed so the health check can inspect the same connection the
         searches use, rather than opening a second one that might point
         somewhere else."""

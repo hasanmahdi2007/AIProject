@@ -45,6 +45,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Protocol
 
 from fastembed import SparseTextEmbedding, TextEmbedding
 from fastembed.rerank.cross_encoder import TextCrossEncoder
@@ -55,11 +56,38 @@ from beacon_core.settings import Settings, get_settings
 __all__ = [
     "CrossEncoder",
     "DenseEncoder",
+    "DenseQueryEncoder",
+    "PairScorer",
     "SparseEncoder",
+    "SparseQueryEncoder",
     "get_cross_encoder",
     "get_dense_encoder",
     "get_sparse_encoder",
 ]
+
+
+class DenseQueryEncoder(Protocol):
+    """What :class:`~retrieval.search.HybridSearcher` needs from the embedder.
+
+    The rest of the service depends on these three protocols rather than on the
+    concrete classes below, for one concrete reason: the unit suite must pass
+    with **no ONNX weights on disk**. CI's fast job would otherwise have to
+    download 400 MB of models to check that RRF adds fractions correctly. A stub
+    returning a hand-written vector satisfies this, and the real models are
+    confined to the integration tests, which skip when the cache is cold.
+    """
+
+    def encode_query(self, text: str) -> list[float]: ...
+
+
+class SparseQueryEncoder(Protocol):
+    def encode_query(self, text: str) -> models.SparseVector: ...
+
+
+class PairScorer(Protocol):
+    """A cross-encoder: scores ``(query, document)`` pairs. Higher is better."""
+
+    def score(self, query: str, documents: list[str]) -> list[float]: ...
 
 
 @dataclass(frozen=True, slots=True)
