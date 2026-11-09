@@ -1,0 +1,33 @@
+// Hand labels for judge calibration. Copy to hand_labels.jsonl and fill in.
+//
+// Cohen's kappa compares the Opus 5.5 judge against a human on the SAME items.
+// Without this file there is nothing to calibrate against, and the harness
+// reports the judge as uncalibrated rather than inventing an agreement number.
+//
+// Format: one JSON object per line.
+//   item_id  "<topic_id>:<nct_id>", exactly as evals.judge.JudgeItem.make_id
+//            builds it. This is the join key between your labels and the
+//            judge's verdicts; if it does not match, calibrate() raises
+//            rather than silently scoring the overlap.
+//   label    one of: eligible, likely_eligible, insufficient_info, excluded
+//            (the frozen EligibilityCategory contract - no other value loads)
+//
+// How to label, so that the number means something:
+//
+//   * Label BEFORE looking at the judge's output. Reading its verdict first
+//     turns calibration into agreement-with-yourself-after-being-anchored.
+//   * Use insufficient_info whenever the note genuinely lacks the fact a
+//     criterion needs. Abstention is a correct answer here, not a cop-out,
+//     and a judge that never abstains should be penalised for it.
+//   * Aim for 50-100 items spread across topics, not 100 items from three
+//     topics: kappa on a narrow sample measures those topics.
+//   * Include items you expect to be hard. A calibration set of easy cases
+//     produces a high kappa that predicts nothing about the hard ones.
+//
+// Delete these comment lines or keep them - lines starting // are skipped.
+//
+// Example rows, with placeholder ids. REPLACE THEM; they are not real labels:
+//
+// {"item_id": "1:NCT00000000", "label": "excluded"}
+// {"item_id": "1:NCT00000001", "label": "insufficient_info"}
+// {"item_id": "2:NCT00000002", "label": "eligible"}

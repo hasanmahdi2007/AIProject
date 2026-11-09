@@ -1,0 +1,5 @@
+# Generated evaluation reports. Never committed: a report in git goes stale
+# silently and then gets quoted as if it were current. Regenerate with
+#   uv run python -m evals.report
+*
+!.gitignore
