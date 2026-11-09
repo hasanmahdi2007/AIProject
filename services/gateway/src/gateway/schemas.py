@@ -115,7 +115,20 @@ class MatchResult(Contract):
 
     match_id: str
     status: MatchStatus
+
     current_step: PipelineStep | None = None
+    """The last step the worker *entered*, which is not cleared on completion.
+
+    A finished run therefore comes back with ``status="completed"`` **and**
+    ``current_step="rank_and_explain"``, because that is where it ended. It is
+    deliberately not nulled: "where did this run get to?" is the question you
+    ask of a failed run, and clearing it on success would make the field mean
+    different things either side of the finish line.
+
+    So do not derive "which step is in progress" from this field alone - key
+    that off ``status == "running"``. C4 found this while verifying the console
+    against a live gateway: a progress rail reading only ``current_step`` shows
+    a completed run as perpetually working on step 7."""
 
     note: NumberedNote | None = None
     """``None`` means the worker has not split the note yet. Deliberately not
