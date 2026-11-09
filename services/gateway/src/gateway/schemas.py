@@ -12,7 +12,14 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from beacon_core.schemas import Contract, MatchStatus, PipelineStep
+from beacon_core.schemas import (
+    Contract,
+    MatchStatus,
+    NumberedNote,
+    PatientProfile,
+    PipelineStep,
+    RankedTrial,
+)
 
 __all__ = [
     "ChatRequest",
@@ -20,6 +27,7 @@ __all__ = [
     "HealthResponse",
     "MatchAccepted",
     "MatchRequest",
+    "MatchResult",
     "MatchStatusSnapshot",
 ]
 
@@ -84,3 +92,44 @@ class MatchStatusSnapshot(Contract):
     match_id: str
     status: MatchStatus
     current_step: PipelineStep | None = None
+
+
+class MatchResult(Contract):
+    """Body of ``GET /v1/matches/{match_id}`` - one run's whole answer.
+
+    This route exists because the ``completed`` SSE frame used to be the *only*
+    delivery of a finished run's results. A page reload, a late connect or a
+    second viewer could never obtain them: ``_match_event_stream`` emits
+    ``status`` then ``done`` and returns for an already-terminal run. Worse,
+    the 202 from ``POST /v1/matches`` sets ``Location: /v1/matches/{id}``, so
+    the header advertised a route that did not exist. Read from Postgres, which
+    is the source of truth for all of this anyway.
+
+    ``note`` and ``profile`` are part of the body for a specific reason, not
+    for convenience: a ``CriterionJudgment.evidence_sentence_ids`` list is
+    meaningless without the ``NumberedNote`` it indexes, so a client that
+    renders cited evidence needs both halves in one response. Re-splitting the
+    note client-side is not an option - a different split yields different
+    sentence IDs and the citation would silently point at the wrong sentence.
+    """
+
+    match_id: str
+    status: MatchStatus
+    current_step: PipelineStep | None = None
+
+    note: NumberedNote | None = None
+    """``None`` means the worker has not split the note yet. Deliberately not
+    an empty ``NumberedNote``, which would read as "a note with no sentences"
+    and make an unresolvable citation look like a data error instead of a
+    not-yet."""
+
+    profile: PatientProfile | None = None
+    results: list[RankedTrial] = Field(default_factory=list)
+
+    trial_count: int = 0
+    """Number of rows in ``results``, so a client can assert it got them all."""
+
+    total_cost_usd: float = 0.0
+    duration_ms: float | None = None
+    error: str | None = None
+    """Set only when ``status == "failed"``."""
