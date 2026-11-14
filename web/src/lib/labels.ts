@@ -85,6 +85,16 @@ export function formatScore(value: number | null | undefined): string {
   return value.toFixed(3);
 }
 
+/**
+ * The ranking score, which the API computes on a 0-5 scale: eligible trials
+ * land in 3.75-5, likely eligible 2.5-3.75, insufficient info 1.25-2.5 and
+ * excluded 0-1.25 (see `match_worker/verdict.py`).
+ */
+export function formatFinalScore(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return `${value.toFixed(2)} / 5`;
+}
+
 export function formatPercent(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
 }

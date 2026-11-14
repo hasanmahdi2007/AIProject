@@ -5,6 +5,7 @@ import {
   ELIGIBILITY_CATEGORIES,
   KIND_LABELS,
   formatPercent,
+  formatFinalScore,
   formatScore,
 } from "@/lib/labels";
 import type { CriterionJudgment, RankedTrial } from "@/lib/types";
@@ -202,7 +203,7 @@ function TrialCard({
           <span className="tabular">Rank {trial.rank}</span>
           <span aria-hidden className="opacity-60">·</span>
           <span>{category.text}</span>
-          <span className="ml-auto tabular">score {formatScore(trial.score)}</span>
+          <span className="ml-auto tabular">score {formatFinalScore(trial.score)}</span>
         </span>
         <span className="flex items-start gap-4 px-4 pb-4 pt-3">
           <span className="min-w-0 flex-1">
