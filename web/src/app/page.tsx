@@ -381,12 +381,12 @@ export default function ConsolePage() {
         </div>
         <div className="flex gap-2.5">
           <dt className="shrink-0">
-            <span className="tag bg-nhs-dark text-white tabular">≈ $0.10</span>
+            <span className="tag bg-nhs-dark text-white tabular">≈ $0.05</span>
           </dt>
           <dd>
             &ldquo;Match trials&rdquo; runs the real pipeline and calls
-            Claude about 47 times (Haiku; about $0.40 if the worker runs
-            the rule checks on Sonnet).
+            Claude about 27 times for 10 trials (Haiku, estimated; about
+            $0.20 if the worker runs the rule checks on Sonnet).
           </dd>
         </div>
       </dl>

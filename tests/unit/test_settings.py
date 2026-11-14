@@ -44,7 +44,8 @@ class TestDefaults:
 
     def test_rrf_and_funnel_defaults(self) -> None:
         r = get_settings().retrieval
-        assert (r.fuse_top_k, r.rerank_top_k, r.rrf_k) == (100, 20, 60)
+        assert (r.fuse_top_k, r.rerank_top_k, r.rrf_k) == (100, 10, 60)
+        assert r.use_rerank is False
 
 
 class TestEnvironmentOverrides:
