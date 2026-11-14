@@ -82,7 +82,11 @@ class RetrievalClient:
     """``POST {base_url}/search``, typed both ways."""
 
     base_url: str
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 240.0
+    """Matches ``WorkerConfig.retrieval_timeout_seconds``; see that field for
+    why 30 seconds was wrong. Reranking 100 candidates on CPU takes tens of
+    seconds, so a short timeout turns a slow-but-healthy search into a failed
+    match."""
     client: httpx.AsyncClient | None = None
 
     @property

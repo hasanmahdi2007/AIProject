@@ -78,7 +78,28 @@ class WorkerConfig(BaseSettings):
     laptop demo, and the knob the crash test uses to make a run long enough to
     be killed at a reproducible point. Default 0: off in normal operation."""
 
-    retrieval_timeout_seconds: float = Field(default=30.0, gt=0)
+    retrieval_timeout_seconds: float = Field(default=240.0, gt=0)
+    """Not 30 seconds. A real /search outruns that, so every match failed.
+
+    Measured 9 Nov, end to end for the first time: the worker timed out after
+    30s, retried three times and parked the job in the DLQ. The search had not
+    failed - it was still reranking.
+
+    B2 measured the cross-encoder at roughly 3 pairs/second on this hardware,
+    so reranking ``fuse_top_k=100`` candidates takes about 34 seconds after its
+    length-sorted batching fix, and took 161 seconds before. The guide's
+    "~100 pairs/second" estimate - from which a 30s timeout looks generous -
+    is wrong by two orders of magnitude.
+
+    Nothing caught it in testing because the two halves were never exercised
+    together: B2 tested retrieval standalone, and the worker's tests stub
+    retrieval at the HTTP layer with respx, which answers instantly. A stub
+    that returns faster than the real thing hides exactly this class of bug.
+
+    240s leaves headroom over the measured 34s for a cold model load, a larger
+    ``fuse_top_k``, or a machine also running the ingest. Lower it once the
+    reranker is faster (GPU, int8, or ``reranker_max_chars``), and prefer
+    fixing the latency to raising this further."""
     retrieval_attempts: int = Field(default=3, ge=1)
 
     explain_top_k: int = Field(default=5, ge=0)
