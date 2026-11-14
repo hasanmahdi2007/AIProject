@@ -32,7 +32,7 @@ class WorkerConfig(BaseSettings):
 
     # ------------------------------------------------------------- budgets --
     max_cost_usd: float = Field(default=0.50, gt=0)
-    """Dollar ceiling for one match. 20 Haiku rule checks on a cached prefix
+    """Dollar ceiling for one match. 10 Haiku rule checks on a cached prefix
     land near a cent, so the default is ~50x headroom: it stops a runaway, it
     does not shape normal runs."""
 

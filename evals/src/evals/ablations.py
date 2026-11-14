@@ -157,7 +157,7 @@ class RunConfig:
     apply_age_sex_filters: bool = False
     llm_rule_matching: bool = False
     fuse_top_k: int = 100
-    rerank_top_k: int = 20
+    rerank_top_k: int = 10
     rrf_k: int = 60
 
     def __post_init__(self) -> None:
@@ -271,9 +271,14 @@ HYBRID_QUERIES_N3 = RunConfig(
     llm_query_generation=True,
     query_count=3,
 )
+# The rerank rows are a measured branch, not a rung of the ladder: on TREC 2021
+# the cross-encoder added no quality once unjudged trials were accounted for
+# (condensed-list nDCG@10 0.502 vs 0.494 without it) and cost 34-50 s of CPU
+# per match, so production turned it off on 14 Nov. The rows after it build on
+# the un-reranked hybrid, which is what the system now runs.
 PLUS_RERANK = RunConfig(
     name="plus_rerank",
-    description="... + bge-reranker-base cross-encoder rerank to 20",
+    description="... + bge-reranker-base cross-encoder rerank (measured branch; off in production)",
     llm_query_generation=True,
     query_count=3,
     use_rerank=True,
@@ -283,7 +288,6 @@ PLUS_FILTERS = RunConfig(
     description="... + age/sex hard filters applied inside the index traversal",
     llm_query_generation=True,
     query_count=3,
-    use_rerank=True,
     apply_age_sex_filters=True,
 )
 PLUS_RERANK_NO_LLM = RunConfig(
@@ -294,7 +298,6 @@ PLUS_RERANK_NO_LLM = RunConfig(
 PLUS_FILTERS_NO_LLM = RunConfig(
     name="plus_age_sex_filters_no_llm",
     description="... + age/sex hard filters, patient note as the query (no LLM)",
-    use_rerank=True,
     apply_age_sex_filters=True,
 )
 FULL_SYSTEM = RunConfig(
@@ -302,7 +305,6 @@ FULL_SYSTEM = RunConfig(
     description="... + LLM rule matching (the complete pipeline)",
     llm_query_generation=True,
     query_count=3,
-    use_rerank=True,
     apply_age_sex_filters=True,
     llm_rule_matching=True,
 )
@@ -347,8 +349,8 @@ rerank row is free" would mean waiting on a spend approval for the rerank and
 filter measurements, which this table's last two rows take at no cost.
 
 Measuring Recall@100 needs 100 candidates back. Every row here keeps the
-default ``rerank_top_k=20``, which is right for nDCG@10 and P@10 but would make
-"Recall@100" silently mean recall at 20. The run-file generator that consumes
+default ``rerank_top_k=10``, which is right for nDCG@10 and P@10 but would make
+"Recall@100" silently mean recall at 10. The run-file generator that consumes
 this table must request ``rerank_top_k=fuse_top_k=100`` for the recall pass
 (``dataclasses.replace`` on each row), not use these rows verbatim.
 

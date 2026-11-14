@@ -81,6 +81,10 @@ def test_the_table_is_cumulative_from_the_query_generation_row_on() -> None:
     assert not ABLATION_TABLE[3].use_rerank
     assert ABLATION_TABLE[5].use_rerank
     assert not ABLATION_TABLE[5].apply_age_sex_filters
+    # Rerank is a measured branch, off in production: filters build on row 5's
+    # parent (N=3 queries, no rerank), and so does the full system.
+    assert not ABLATION_TABLE[6].use_rerank
+    assert not FULL_SYSTEM.use_rerank
     assert ABLATION_TABLE[6].apply_age_sex_filters
     assert not ABLATION_TABLE[6].llm_rule_matching
     assert FULL_SYSTEM.llm_rule_matching
@@ -115,9 +119,9 @@ def test_reranking_more_than_was_fused_is_rejected() -> None:
         RunConfig(name="x", description="", fuse_top_k=10, rerank_top_k=20)
 
 
-def test_the_pipeline_shape_is_375k_to_100_to_20() -> None:
+def test_the_pipeline_shape_is_375k_to_100_to_10() -> None:
     assert FULL_SYSTEM.fuse_top_k == 100
-    assert FULL_SYSTEM.rerank_top_k == 20
+    assert FULL_SYSTEM.rerank_top_k == 10
     assert FULL_SYSTEM.rrf_k == 60
 
 
@@ -128,8 +132,8 @@ def test_to_search_request_renders_the_frozen_contract() -> None:
     filters = AgeSexFilter(age=45, sex="male")
     request = FULL_SYSTEM.to_search_request(queries, filters)
     assert request.fuse_top_k == 100
-    assert request.rerank_top_k == 20
-    assert request.use_rerank is True
+    assert request.rerank_top_k == 10
+    assert request.use_rerank is False
     assert request.filters.age == 45
     assert request.filters.include_unknown is True
 

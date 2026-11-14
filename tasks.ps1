@@ -157,14 +157,15 @@ switch ($Task) {
         # for a free dry run. Without this every real match failed at the
         # first node with FixtureMissingError.
         #
-        # Cost: 96% of a match is the 20 rule checks. On Sonnet that is about
-        # $0.35-0.43 per click; on Haiku about $0.10 (measured: two live runs, $0.103 and $0.107). The console is for trying
+        # Cost: 96% of a match is the rule checks, one per candidate trial (10 since
+        # 14 Nov, 20 before). At 20 trials Haiku measured $0.103 and $0.107 per click
+        # and Sonnet about $0.35-0.43; at 10, expect about half (Haiku ~$0.05, Sonnet ~$0.20). The console is for trying
         # things, so it defaults to Haiku. Sonnet is for the one headline eval
         # run: set ANTHROPIC_DECISION_MODEL=claude-sonnet-5-5 first to use it.
         Assert-Uv; Assert-Docker
         if (-not $env:BEACON_LLM_MODE) { $env:BEACON_LLM_MODE = 'live' }
         if (-not $env:ANTHROPIC_DECISION_MODEL) { $env:ANTHROPIC_DECISION_MODEL = 'claude-haiku-5-5' }
-        $perMatch = if ($env:ANTHROPIC_DECISION_MODEL -like '*sonnet*') { 'about $0.40' } else { 'about $0.10' }
+        $perMatch = if ($env:ANTHROPIC_DECISION_MODEL -like '*sonnet*') { 'about $0.20' } else { 'about $0.05' }
         Write-Host "LLM mode: $($env:BEACON_LLM_MODE) · rule checks on $($env:ANTHROPIC_DECISION_MODEL) · $perMatch per Match trials click" -ForegroundColor Yellow
         Invoke-Checked 'uv' @('run', 'python', '-m', 'match_worker')
     }
