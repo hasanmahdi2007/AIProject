@@ -8,11 +8,11 @@ every eligibility decision traced to the sentence it came from.**
 > **synthetic** patient notes. It has no clinical validity, it must not be used
 > for care decisions, and no real patient record should ever be entered into it.
 
-**Status: Wave 1. Not yet runnable end to end, and no results have been
-measured.** The contracts, the LLM layer, the public API and the benchmark
-loaders are merged; retrieval, the match pipeline and ingestion are declared but
-empty. Every performance figure below is an explicit placeholder in braces —
-see the [placeholder index](#placeholder-index). Nothing in this file is an
+**Status: runnable end to end on the full corpus (375,580 trials indexed).**
+Retrieval has been measured on the 2021 tuning split, with no LLM involved; see
+[Results](#results). The LLM rows and the held-out 2022 headline are not
+measured yet, and those cells are still explicit placeholders in braces (see
+the [placeholder index](#placeholder-index)). Nothing in this file is an
 estimate dressed up as a measurement.
 
 ---
@@ -134,10 +134,45 @@ Full detail, with everything pinned to the code that implements it:
 
 ## Results
 
-**Nothing here has been measured yet.** The evaluation harness does not exist,
-so every cell is a placeholder. A number appears in this table only after it has
-been produced by a run against held-out TREC CT 2022 and recorded in the
-`eval_runs` table.
+### Measured: retrieval without an LLM, TREC 2021 (tuning, 75 topics)
+
+Measured 14 Nov 2026 over all 375,580 indexed trials. Each configuration
+searches with the patient note itself as the query, so none of these rows
+calls Claude. The run files are produced by `scripts/make_runs.py`, which
+drives the production `RetrievalService`, and they are committed under
+`evals/runs/2021/`. Every metric agrees exactly with an independent `ranx`
+recomputation. Brackets are 95% bootstrap intervals over topics (10,000
+resamples).
+
+| Configuration | nDCG@10 | P@10 | MRR | Recall@100 |
+|---|---|---|---|---|
+| BM25 only | 0.254 [0.214, 0.293] | 0.316 [0.267, 0.365] | 0.628 [0.543, 0.711] | 0.114 [0.095, 0.134] |
+| Dense only (`bge-small-en-v1.5`) | 0.283 [0.238, 0.330] | 0.353 [0.297, 0.412] | 0.617 [0.532, 0.704] | 0.160 [0.129, 0.194] |
+| **Hybrid, RRF k=60** | **0.340 [0.297, 0.382]** | **0.433 [0.380, 0.487]** | **0.692 [0.616, 0.766]** | 0.155 [0.129, 0.184] |
+| Hybrid + cross-encoder rerank (`bge-reranker-base`) | 0.236 [0.190, 0.282] | 0.311 [0.253, 0.369] | 0.477 [0.397, 0.561] | 0.155 [0.129, 0.184] |
+
+What these numbers say:
+
+- **Fusion works.** Hybrid RRF beats BM25 on nDCG@10 by +0.086 (0.254 to
+  0.340) and on P@10 by +0.117. The 95% intervals do not overlap.
+- **The reranker's drop is mostly a pooling artifact, not a worse ranking.**
+  Only 42% of the reranker's top 10 trials were ever judged by TREC, against
+  62% for hybrid, and an unjudged trial scores as not relevant. Scored on
+  judged trials only (the condensed-list method, Sakai 2007), the two are level:
+  nDCG@10 is 0.502 with the reranker and 0.494 without, and P@10 is 0.667
+  against 0.661. So on this benchmark the reranker buys no measurable quality,
+  and it costs 34 to 50 seconds of CPU per match. This is a 2021 (tuning)
+  finding, so it may be acted on before the held-out run.
+- Recall@100 is low for every configuration, because the TREC pool judges
+  only a small slice of the corpus per topic and the query here is the raw
+  note. Rewriting the note into LLM-generated queries is the row meant to lift
+  it, and it is not measured yet.
+- The age/sex filter row is not measured: it needs the patient's age and sex,
+  which only the LLM profiler extracts.
+
+The held-out 2022 run files exist (`evals/runs/2022/`), but their labels stay
+unread until tuning on 2021 is frozen
+([ADR 0006](docs/adr/0006-2021-2022-tuning-split.md)).
 
 ### Headline — TREC Clinical Trials 2022, held out (50 topics)
 
@@ -169,9 +204,9 @@ parsing.
 
 | Configuration | What it tests | nDCG@10 | Recall@100 | Δ vs row above |
 |---|---|---|---|---|
-| BM25 only | classic keyword baseline | `{nDCG@10}` | `{recall@100}` | — |
-| Dense only (`bge-small-en-v1.5`) | general-purpose embeddings | `{nDCG@10}` | `{recall@100}` | `{delta}` |
-| Hybrid, RRF k=60 | does combining help? | `{nDCG@10}` | `{recall@100}` | `{delta}` |
+| BM25 only | classic keyword baseline | 0.254 (2021) | 0.114 (2021) | — |
+| Dense only (`bge-small-en-v1.5`) | general-purpose embeddings | 0.283 (2021) | 0.160 (2021) | +0.029 / +0.046 |
+| Hybrid, RRF k=60 | does combining help? | 0.340 (2021) | 0.155 (2021) | +0.057 / −0.005 |
 | + LLM query generation (N=3 vs N=1) | does rewriting the note into queries help recall? | `{nDCG@10}` | `{recall@100}` | `{delta}` |
 | + cross-encoder rerank | does reranking improve the top 10? | `{nDCG@10}` | `{recall@100}` | `{delta}` |
 | + age/sex filters | do hard filters help, or wrongly drop trials? | `{nDCG@10}` | `{recall@100}` | `{delta}` |
