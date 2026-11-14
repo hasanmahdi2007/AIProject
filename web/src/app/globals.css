@@ -3,15 +3,97 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+  /* The page ground is NHS blue; panels sit on it in pale grey. White text on
+     #005EB8 is about 6.3:1, ink on the panel grey about 14:1. */
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-nhs-blue text-[15px] leading-6 text-white antialiased;
+    font-feature-settings: "tnum" 0;
+  }
+  ::selection {
+    background: #ffeb3b;
+    color: #212b32;
+  }
+  /* The NHS focus state: yellow fill with a dark underline. One style for
+     every focusable thing, so the keyboard path is always visible. */
+  :focus-visible {
+    outline: 3px solid #ffeb3b;
+    outline-offset: 0;
+    box-shadow: 0 4px 0 #212b32;
+  }
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #00509e;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #7fb0dd;
+    border: 3px solid #00509e;
+    border-radius: 6px;
+  }
+  textarea,
+  input {
+    caret-color: #005eb8;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-md bg-nhs-panel text-nhs-ink shadow-card;
+  }
+  /* Section headings on panels. Sentence case and bold, never a tracked
+     caps label above a heading. */
+  .heading {
+    @apply text-[17px] font-bold leading-6 text-nhs-dark;
+  }
+  .field-label {
+    @apply text-[15px] font-bold text-nhs-ink;
+  }
+  /* The NHS primary button: green, with a darker edge it presses into. */
+  .btn-primary {
+    @apply relative inline-flex items-center gap-2 rounded bg-nhs-green px-5 py-2.5 text-[16px] font-bold text-white transition-colors hover:bg-[#00662f] active:translate-y-[2px] disabled:cursor-not-allowed disabled:bg-[#7fa58f] disabled:shadow-none;
+    box-shadow: 0 4px 0 #00401e;
+  }
+  .btn-primary:active {
+    box-shadow: 0 2px 0 #00401e;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 rounded border-2 border-nhs-blue bg-transparent px-4 py-2 text-[15px] font-bold text-nhs-blue transition-colors hover:bg-nhs-blue hover:text-white disabled:cursor-not-allowed disabled:border-nhs-line disabled:text-nhs-mid disabled:hover:bg-transparent;
+  }
+  .field {
+    @apply w-full rounded border-2 border-nhs-ink bg-white text-nhs-ink outline-none transition-colors placeholder:text-nhs-mid;
+  }
+  .field:focus {
+    outline: 3px solid #ffeb3b;
+    box-shadow: inset 0 0 0 1px #212b32;
+  }
+  .tag {
+    @apply inline-flex items-center whitespace-nowrap rounded px-2 py-0.5 text-[13px] font-bold leading-5;
   }
 }
 
 @layer utilities {
-  /* The evidence highlight. Deliberately loud: the point of this console is
-     that a reader can see, at a glance, which sentence a rule was decided on. */
+  /* The evidence highlight: the sentence a selected rule was decided on.
+     Aqua is reserved for citations and selection, so nothing else competes. */
   .evidence-on {
-    @apply bg-amber-200 ring-2 ring-amber-500 ring-offset-1 ring-offset-white;
+    background-color: #d2eefa;
+    box-shadow: inset 0 0 0 2px #41b6e6;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
