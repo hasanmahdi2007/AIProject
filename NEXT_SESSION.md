@@ -4,6 +4,8 @@ Brief handoff, written 2026-11-14. For the details (ports, traps, measured facts
 [docs/RESUME_HERE.md](docs/RESUME_HERE.md). This file covers only what you need to start.
 **Read [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) next**: the code review findings (F1–F6)
 and the remaining-work order supersede the task list below.
+**After 15 Nov:** build the weekly live ClinicalTrials.gov sync, designed in
+[docs/LIVE_SYNC_PLAN.md](docs/LIVE_SYNC_PLAN.md). Never update the frozen TREC index.
 
 ## What Beacon is
 
