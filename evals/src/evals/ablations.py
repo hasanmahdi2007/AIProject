@@ -85,6 +85,7 @@ __all__ = [
     "ABLATION_TABLE",
     "AGE_FILTER_CENSUS",
     "BASELINE_CONFIG",
+    "FREE_ABLATION_TABLE",
     "FULL_SYSTEM",
     "QUERY_COUNT_SWEEP",
     "AblationReport",
@@ -156,7 +157,7 @@ class RunConfig:
     apply_age_sex_filters: bool = False
     llm_rule_matching: bool = False
     fuse_top_k: int = 100
-    rerank_top_k: int = 20
+    rerank_top_k: int = 10
     rrf_k: int = 60
 
     def __post_init__(self) -> None:
@@ -182,6 +183,22 @@ class RunConfig:
                 f"{self.name}: rerank_top_k ({self.rerank_top_k}) > fuse_top_k "
                 f"({self.fuse_top_k}); the reranker cannot see more than it is given"
             )
+
+    @property
+    def requires_llm(self) -> bool:
+        """Whether producing this row costs an Anthropic call.
+
+        The distinction is worth having in code rather than in a comment,
+        because the components and the rows diverge: a cross-encoder reranker
+        is a free local model, but the cumulative ``plus_rerank`` row stacks it
+        on LLM query generation and therefore is not free. Reading the first
+        fact as the second would stall measurements that need no approval.
+
+        ``llm_rule_matching`` is by far the expensive half - one call per
+        candidate trial, 20 per patient - while query generation is a single
+        call per patient.
+        """
+        return self.llm_query_generation or self.llm_rule_matching
 
     def to_search_request(
         self, queries: Sequence[RankedQuery], filters: AgeSexFilter
@@ -254,9 +271,14 @@ HYBRID_QUERIES_N3 = RunConfig(
     llm_query_generation=True,
     query_count=3,
 )
+# The rerank rows are a measured branch, not a rung of the ladder: on TREC 2021
+# the cross-encoder added no quality once unjudged trials were accounted for
+# (condensed-list nDCG@10 0.502 vs 0.494 without it) and cost 34-50 s of CPU
+# per match, so production turned it off on 14 Nov. The rows after it build on
+# the un-reranked hybrid, which is what the system now runs.
 PLUS_RERANK = RunConfig(
     name="plus_rerank",
-    description="... + bge-reranker-base cross-encoder rerank to 20",
+    description="... + bge-reranker-base cross-encoder rerank (measured branch; off in production)",
     llm_query_generation=True,
     query_count=3,
     use_rerank=True,
@@ -266,7 +288,16 @@ PLUS_FILTERS = RunConfig(
     description="... + age/sex hard filters applied inside the index traversal",
     llm_query_generation=True,
     query_count=3,
+    apply_age_sex_filters=True,
+)
+PLUS_RERANK_NO_LLM = RunConfig(
+    name="plus_rerank_no_llm",
+    description="hybrid RRF + cross-encoder rerank, patient note as the query (no LLM)",
     use_rerank=True,
+)
+PLUS_FILTERS_NO_LLM = RunConfig(
+    name="plus_age_sex_filters_no_llm",
+    description="... + age/sex hard filters, patient note as the query (no LLM)",
     apply_age_sex_filters=True,
 )
 FULL_SYSTEM = RunConfig(
@@ -274,7 +305,6 @@ FULL_SYSTEM = RunConfig(
     description="... + LLM rule matching (the complete pipeline)",
     llm_query_generation=True,
     query_count=3,
-    use_rerank=True,
     apply_age_sex_filters=True,
     llm_rule_matching=True,
 )
@@ -294,6 +324,44 @@ ABLATION_TABLE: Final[tuple[RunConfig, ...]] = (
 Rows 1-3 are alternatives to each other; rows 4-8 each add one thing to the row
 above, which is what makes the paired comparison in :class:`AblationRow`
 interpretable as "what did *this* component contribute".
+"""
+
+FREE_ABLATION_TABLE: Final[tuple[RunConfig, ...]] = (
+    BM25_ONLY,
+    DENSE_ONLY,
+    HYBRID_RRF,
+    PLUS_RERANK_NO_LLM,
+    PLUS_FILTERS_NO_LLM,
+)
+"""The ablation ladder that needs **zero Anthropic calls**, end to end.
+
+Every component here is a local model or an index operation: BM25, bge-small
+embeddings, RRF, the bge-reranker cross-encoder and typed payload filters. All
+five rows search with the **patient note itself** as the query, so none of them
+needs query generation.
+
+This exists because of an easy and expensive misreading of
+:data:`ABLATION_TABLE`. That table is *cumulative*, so its ``plus_rerank`` and
+``plus_age_sex_filters`` rows sit on top of ``llm_query_generation=True,
+query_count=3`` - the components are free but the rows are not, and only three
+of its eight rows cost nothing. Reading "the reranker is a local model" as "the
+rerank row is free" would mean waiting on a spend approval for the rerank and
+filter measurements, which this table's last two rows take at no cost.
+
+Measuring Recall@100 needs 100 candidates back. Every row here keeps the
+default ``rerank_top_k=10``, which is right for nDCG@10 and P@10 but would make
+"Recall@100" silently mean recall at 10. The run-file generator that consumes
+this table must request ``rerank_top_k=fuse_top_k=100`` for the recall pass
+(``dataclasses.replace`` on each row), not use these rows verbatim.
+
+With this table, **Recall@100 - the metric that governs the whole system - and
+the dense/sparse/fusion/rerank/filter contributions are all measurable for
+$0.00** as soon as the ingest completes. What it cannot measure is the value of
+LLM query generation or of LLM rule matching; those two questions, and only
+those two, need approved spend.
+
+:attr:`RunConfig.requires_llm` is the machine-checkable version of this claim,
+and a test asserts every row here is free rather than trusting this docstring.
 """
 
 BASELINE_CONFIG: Final = BM25_ONLY

@@ -203,9 +203,19 @@ class RetrievalSettings(BaseModel):
     "does LLM query generation help at all?" ablation row."""
 
     fuse_top_k: int = 100
-    rerank_top_k: int = 20
+    rerank_top_k: int = 10
+    """Trials the rule checker judges, one Claude call each - so cost and time
+    scale with it. 10, not 20 (changed 14 Nov): on TREC 2021 the top 10 keeps
+    two thirds of the eligible trials the top 20 holds (5 or 7 keep under half),
+    it still fills nDCG@10 and P@10, and it halves the rule-check bill."""
     rrf_k: int = 60
-    use_rerank: bool = True
+    use_rerank: bool = False
+    """Off since 14 Nov. Measured on TREC 2021 (75 topics, no LLM): the
+    bge-reranker-base cross-encoder dropped official nDCG@10 from 0.340 to
+    0.236, and on judged trials only (condensed list) it tied hybrid RRF,
+    0.502 vs 0.494 - so the drop is unjudged trials, and the gain is nothing.
+    It cost 34-50 s of CPU per match. Kept as a switch so the ablation row
+    stays reproducible."""
     apply_age_sex_filters: bool = True
     """Its own ablation row, and allowed to come out negative: the filter is
     only as good as the age parsing."""
@@ -243,6 +253,14 @@ class Settings(BaseSettings):
     credentialed requests, and this is a medical-decision-support surface where
     "any website may call the API" is the wrong default even in dev. Set
     ``BEACON_CORS_ALLOW_ORIGINS='["https://..."]'`` to deploy elsewhere."""
+
+    progress_bridge: bool = True
+    """Run the gateway's Kafka -> Redis progress bridge (``gateway.bridge``).
+
+    On by default: without it the console only learns a run finished from the
+    SSE stream's heartbeat re-read of Postgres. ``BEACON_PROGRESS_BRIDGE=false``
+    turns it off. The gateway's unit tests pass ``create_app(progress_bridge=False)``
+    instead, so that starting an app never opens a Kafka connection."""
 
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)

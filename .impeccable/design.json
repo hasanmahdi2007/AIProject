@@ -1,0 +1,587 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T12:47:49.242Z",
+  "title": "Design System: Beacon console",
+  "extensions": {
+    "colorMeta": {
+      "nhs-blue": {
+        "role": "primary",
+        "displayName": "NHS Blue",
+        "canonical": "oklch(48.9% 0.161 254.9)",
+        "tonalRamp": [
+          "#020B1A",
+          "#00235C",
+          "#004291",
+          "#0F64BE",
+          "#4B8BDA",
+          "#81B1EE",
+          "#B6D4F9",
+          "#E7EFF9"
+        ]
+      },
+      "nhs-dark": {
+        "role": "primary",
+        "displayName": "NHS Dark Blue",
+        "canonical": "oklch(34.7% 0.153 261.3)",
+        "tonalRamp": [
+          "#000825",
+          "#00196C",
+          "#0E3E94",
+          "#3863B2",
+          "#6389CB",
+          "#92AFE0",
+          "#C0D2F0",
+          "#E9EFF9"
+        ]
+      },
+      "nhs-panel": {
+        "role": "neutral",
+        "displayName": "Panel Grey",
+        "canonical": "oklch(94.3% 0.006 211.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252727",
+          "#434546",
+          "#646767",
+          "#868A8B",
+          "#AAAFB0",
+          "#CDD2D3",
+          "#ECEFEF"
+        ]
+      },
+      "nhs-pale": {
+        "role": "neutral",
+        "displayName": "Recessed Grey",
+        "canonical": "oklch(89.5% 0.007 233.7)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252728",
+          "#434547",
+          "#636768",
+          "#868A8C",
+          "#AAAFB1",
+          "#CDD2D5",
+          "#ECEFF0"
+        ]
+      },
+      "nhs-line": {
+        "role": "neutral",
+        "displayName": "Hairline Grey",
+        "canonical": "oklch(77.4% 0.013 236.7)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242729",
+          "#414649",
+          "#61676B",
+          "#838A90",
+          "#A6AFB5",
+          "#CAD2D8",
+          "#EBEFF2"
+        ]
+      },
+      "nhs-unknown": {
+        "role": "neutral",
+        "displayName": "Abstention Grey",
+        "canonical": "oklch(77.4% 0.013 236.7)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242729",
+          "#414649",
+          "#61676B",
+          "#838A90",
+          "#A6AFB5",
+          "#CAD2D8",
+          "#EBEFF2"
+        ]
+      },
+      "nhs-ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(28.3% 0.019 238.9)",
+        "tonalRamp": [
+          "#080C0E",
+          "#1E282F",
+          "#3D474E",
+          "#5E686E",
+          "#838A90",
+          "#A9AFB3",
+          "#CED1D4",
+          "#EDEFEF"
+        ]
+      },
+      "nhs-mid": {
+        "role": "neutral",
+        "displayName": "Mid Slate",
+        "canonical": "oklch(48.4% 0.037 240.1)",
+        "tonalRamp": [
+          "#080C0F",
+          "#1A2832",
+          "#344856",
+          "#536979",
+          "#798C9B",
+          "#A1B0BC",
+          "#C9D2D9",
+          "#ECEFF1"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White (inputs and text on blue only)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#AEAEAE",
+          "#D1D1D1",
+          "#EEEEEE"
+        ]
+      },
+      "nhs-green": {
+        "role": "secondary",
+        "displayName": "NHS Green",
+        "canonical": "oklch(52.2% 0.141 150.8)",
+        "tonalRamp": [
+          "#030E06",
+          "#00320A",
+          "#00561D",
+          "#007B38",
+          "#459F5F",
+          "#7DC08D",
+          "#B2DEBB",
+          "#E6F2E8"
+        ]
+      },
+      "green-hover": {
+        "role": "secondary",
+        "displayName": "Green Hover",
+        "canonical": "oklch(44.6% 0.120 151.1)",
+        "tonalRamp": [
+          "#010F04",
+          "#003308",
+          "#005521",
+          "#277842",
+          "#5A9A6B",
+          "#8DBB97",
+          "#BED9C3",
+          "#E9F1EA"
+        ]
+      },
+      "green-disabled": {
+        "role": "secondary",
+        "displayName": "Green Disabled",
+        "canonical": "oklch(68.7% 0.053 159.3)",
+        "tonalRamp": [
+          "#080C0A",
+          "#1A2B22",
+          "#334B3E",
+          "#4F6E5D",
+          "#6F937E",
+          "#93B8A2",
+          "#B8DBC6",
+          "#E4F3EA"
+        ]
+      },
+      "nhs-greendark": {
+        "role": "secondary",
+        "displayName": "NHS Dark Green (button edge)",
+        "canonical": "oklch(32.6% 0.084 152.9)",
+        "tonalRamp": [
+          "#010F05",
+          "#003111",
+          "#1B512F",
+          "#447252",
+          "#6E9478",
+          "#9BB6A1",
+          "#C5D6C9",
+          "#EAF0EC"
+        ]
+      },
+      "nhs-lightgreen": {
+        "role": "secondary",
+        "displayName": "NHS Light Green",
+        "canonical": "oklch(72.7% 0.191 131.8)",
+        "tonalRamp": [
+          "#070E03",
+          "#132F00",
+          "#285200",
+          "#417700",
+          "#5D9E00",
+          "#7FC52D",
+          "#A5E866",
+          "#DBFAC3"
+        ]
+      },
+      "nhs-red": {
+        "role": "secondary",
+        "displayName": "NHS Red",
+        "canonical": "oklch(56.5% 0.209 29.6)",
+        "tonalRamp": [
+          "#190503",
+          "#550000",
+          "#8B0000",
+          "#BF1006",
+          "#E94838",
+          "#FF7E6C",
+          "#FFB09F",
+          "#FFE4DD"
+        ]
+      },
+      "red-pale": {
+        "role": "secondary",
+        "displayName": "Red Pale",
+        "canonical": "oklch(94.3% 0.022 24.4)",
+        "tonalRamp": [
+          "#0C0B0B",
+          "#2B2524",
+          "#4B4342",
+          "#6F6362",
+          "#948584",
+          "#BAA9A8",
+          "#DFCCCA",
+          "#F6ECEB"
+        ]
+      },
+      "nhs-purple": {
+        "role": "secondary",
+        "displayName": "NHS Purple",
+        "canonical": "oklch(29.0% 0.162 292.2)",
+        "tonalRamp": [
+          "#0E0227",
+          "#2F006C",
+          "#4A2C8E",
+          "#6954AB",
+          "#8B7CC5",
+          "#AFA5DB",
+          "#D1CCED",
+          "#EEEDF9"
+        ]
+      },
+      "nhs-aqua": {
+        "role": "tertiary",
+        "displayName": "NHS Aqua",
+        "canonical": "oklch(73.1% 0.123 229.5)",
+        "tonalRamp": [
+          "#040D11",
+          "#002B3E",
+          "#004C69",
+          "#007095",
+          "#2095C2",
+          "#49BCEC",
+          "#7ADFFF",
+          "#CCF6FF"
+        ]
+      },
+      "nhs-aquapale": {
+        "role": "tertiary",
+        "displayName": "Aqua Pale",
+        "canonical": "oklch(93.2% 0.034 225.5)",
+        "tonalRamp": [
+          "#090B0C",
+          "#20282B",
+          "#3B474D",
+          "#586970",
+          "#788D96",
+          "#9AB2BD",
+          "#BBD6E2",
+          "#E3F1F7"
+        ]
+      },
+      "aqua-ink": {
+        "role": "tertiary",
+        "displayName": "Aqua Ink",
+        "canonical": "oklch(36.3% 0.074 232.0)",
+        "tonalRamp": [
+          "#000D15",
+          "#002B42",
+          "#0D4B65",
+          "#3C6D86",
+          "#688FA5",
+          "#96B3C3",
+          "#C3D4DE",
+          "#EAEFF3"
+        ]
+      },
+      "nhs-warm": {
+        "role": "tertiary",
+        "displayName": "Warm Yellow",
+        "canonical": "oklch(82.8% 0.167 79.6)",
+        "tonalRamp": [
+          "#100A03",
+          "#392100",
+          "#613C00",
+          "#8C5B00",
+          "#B77C00",
+          "#E3A000",
+          "#FFC333",
+          "#FFE9B3"
+        ]
+      },
+      "warm-pale": {
+        "role": "tertiary",
+        "displayName": "Warm Pale",
+        "canonical": "oklch(97.9% 0.031 92.9)",
+        "tonalRamp": [
+          "#0C0B0A",
+          "#282620",
+          "#48453B",
+          "#6A6659",
+          "#8E8979",
+          "#B4AE9B",
+          "#D7D1BC",
+          "#F2EEE3"
+        ]
+      },
+      "nhs-focus": {
+        "role": "tertiary",
+        "displayName": "Focus Yellow",
+        "canonical": "oklch(92.8% 0.180 102.5)",
+        "tonalRamp": [
+          "#0D0B03",
+          "#2E2700",
+          "#504600",
+          "#756700",
+          "#9B8B00",
+          "#C3B000",
+          "#E8D419",
+          "#FAF2AB"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page title on the blue ground, white; 32px / 40px on the about page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings on the blue ground (20-22px, white) and the patient-summary lead sentence."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel headings in NHS Dark Blue; 15px inside an open trial card."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text; long explanations open to 28px line height and cap at 72ch."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Captions, rule explanations, missing facts, callout copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tags, column headings, definition terms, step numbers."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "NCT ids, rule ids, match ids, lab values and the gateway URL only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-lift",
+        "value": "0 1px 2px rgba(0, 32, 80, 0.18), 0 10px 28px -14px rgba(0, 32, 80, 0.45)",
+        "purpose": "Every card, the disclaimer and standalone callouts on the blue ground. The only ambient shadow."
+      },
+      {
+        "name": "button-edge",
+        "value": "0 4px 0 #00401E",
+        "purpose": "Primary button pressed edge (NHS.UK convention); 0 2px 0 #00401E while active."
+      },
+      {
+        "name": "focus-underline",
+        "value": "0 4px 0 #212B32",
+        "purpose": "Dark underline beneath the 3px #FFEB3B focus outline (NHS.UK convention)."
+      },
+      {
+        "name": "evidence-stroke",
+        "value": "inset 0 0 0 2px #41B6E6",
+        "purpose": "Highlighted note sentence and selected rule row, over Aqua Pale."
+      },
+      {
+        "name": "field-focus",
+        "value": "inset 0 0 0 1px #212B32",
+        "purpose": "Inner ink ring on a focused input, paired with the yellow outline."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-colors",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default colour transitions on buttons, rows, nav links and tags."
+      },
+      {
+        "name": "highlight-and-chevron",
+        "value": "200ms",
+        "purpose": "Note sentence highlight fade; trial card chevron rotates 180 degrees on open."
+      },
+      {
+        "name": "progress-fill",
+        "value": "700ms ease-out",
+        "purpose": "Pipeline bar width."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Under prefers-reduced-motion every transition and animation collapses and the note scroll is instant."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "container",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The NHS.UK green action with a pressed edge.",
+      "html": "<button class=\"ds-btn-primary\">Match trials</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;background:#007F3B;color:#fff;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:16px;font-weight:700;padding:10px 20px;border:0;border-radius:4px;box-shadow:0 4px 0 #00401E;cursor:pointer;transition:background-color 150ms}.ds-btn-primary:hover{background:#00662F}.ds-btn-primary:active{transform:translateY(2px);box-shadow:0 2px 0 #00401E}.ds-btn-primary:focus-visible{outline:3px solid #FFEB3B;outline-offset:0;box-shadow:0 4px 0 #212B32}.ds-btn-primary:disabled{background:#7FA58F;box-shadow:none;cursor:not-allowed}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Blue-stroked secondary action on panels.",
+      "html": "<button class=\"ds-btn-secondary\">Load sample run</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;gap:8px;background:transparent;color:#005EB8;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:15px;font-weight:700;padding:8px 16px;border:2px solid #005EB8;border-radius:4px;cursor:pointer;transition:background-color 150ms,color 150ms}.ds-btn-secondary:hover{background:#005EB8;color:#fff}.ds-btn-secondary:focus-visible{outline:3px solid #FFEB3B;outline-offset:0;box-shadow:0 4px 0 #212B32}.ds-btn-secondary:disabled{border-color:#AEB7BD;color:#4C6272;background:transparent;cursor:not-allowed}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "The only white surface in the system, shown on its panel.",
+      "html": "<div class=\"ds-panel-demo\"><label class=\"ds-label\" for=\"ds-f\">Synthetic patient note</label><input id=\"ds-f\" class=\"ds-field\" placeholder=\"A 67-year-old woman presents with...\"></div>",
+      "css": ".ds-panel-demo{background:#E8EDEE;padding:20px;border-radius:6px}.ds-label{display:block;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:15px;font-weight:700;color:#212B32;margin-bottom:8px}.ds-field{width:100%;box-sizing:border-box;background:#fff;color:#212B32;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:15px;padding:8px 12px;border:2px solid #212B32;border-radius:4px;caret-color:#005EB8;outline:none;transition:border-color 150ms}.ds-field::placeholder{color:#4C6272}.ds-field:focus{outline:3px solid #FFEB3B;box-shadow:inset 0 0 0 1px #212B32}"
+    },
+    {
+      "name": "Header and Navigation",
+      "kind": "nav",
+      "refersTo": "header",
+      "description": "Dark-blue header with the wordmark plate and the underlined current link.",
+      "html": "<header class=\"ds-header\"><a class=\"ds-brand\"><span class=\"ds-mark\">Beacon</span><span class=\"ds-tagline\">clinical-trial matching, with its reasoning shown</span></a><nav class=\"ds-nav\"><a class=\"ds-nav-link ds-current\" aria-current=\"page\" tabindex=\"0\">Console</a><a class=\"ds-nav-link\" tabindex=\"0\">How to read this</a></nav></header>",
+      "css": ".ds-header{background:#003087;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px;padding:12px 24px 0;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif}.ds-brand{display:flex;align-items:center;gap:12px;margin-bottom:12px;text-decoration:none}.ds-mark{background:#fff;color:#003087;border-radius:2px;padding:4px 10px;font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.025em}.ds-tagline{color:#fff;font-size:15px}.ds-nav{display:flex;gap:4px;margin-left:auto}.ds-nav-link{color:rgba(255,255,255,0.85);font-size:16px;font-weight:700;padding:10px 12px 8px;border-bottom:4px solid transparent;cursor:pointer;transition:border-color 150ms,color 150ms}.ds-nav-link:hover{color:#fff;border-bottom-color:rgba(255,255,255,0.5)}.ds-nav-link.ds-current{color:#fff;border-bottom-color:#fff}.ds-nav-link:focus-visible{outline:3px solid #FFEB3B;outline-offset:0;box-shadow:0 4px 0 #212B32}"
+    },
+    {
+      "name": "Verdict and Citation Tags",
+      "kind": "chip",
+      "refersTo": "tag-met",
+      "description": "Fixed verdict colours; insufficient info is neutral grey with a slate inset ring; the citation tag lights aqua when selected.",
+      "html": "<div class=\"ds-tags\"><span class=\"ds-tag ds-met\">Met</span><span class=\"ds-tag ds-likely\">Likely eligible</span><span class=\"ds-tag ds-insufficient\">Insufficient info</span><span class=\"ds-tag ds-notmet\">Not met</span><span class=\"ds-tag ds-na\">Not applicable</span><span class=\"ds-tag ds-cite\" tabindex=\"0\">Evidence: sentence 1, 2</span></div>",
+      "css": ".ds-tags{display:flex;flex-wrap:wrap;gap:8px;background:#E8EDEE;padding:16px;border-radius:6px}.ds-tag{display:inline-flex;align-items:center;white-space:nowrap;border-radius:4px;padding:2px 8px;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:13px;font-weight:700;line-height:20px}.ds-met{background:#007F3B;color:#fff}.ds-likely{background:#78BE20;color:#212B32}.ds-insufficient{background:#AEB7BD;color:#212B32;box-shadow:inset 0 0 0 1px #4C6272}.ds-notmet{background:#D5281B;color:#fff}.ds-na{background:#D8DDE0;color:#212B32;box-shadow:inset 0 0 0 1px #AEB7BD}.ds-cite{background:#D2EEFA;color:#00445E;cursor:pointer;transition:background-color 150ms,color 150ms}.ds-cite:hover{background:#41B6E6;color:#212B32}.ds-cite:focus-visible{outline:3px solid #FFEB3B;outline-offset:0;box-shadow:0 4px 0 #212B32}"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Pale grey panel lifted off the blue ground; never white.",
+      "html": "<div class=\"ds-ground\"><section class=\"ds-card\"><h2 class=\"ds-heading\">Patient summary</h2><p class=\"ds-lead\">58 years old, female, ECOG 1.</p></section></div>",
+      "css": ".ds-ground{background:#005EB8;padding:24px}.ds-card{background:#E8EDEE;color:#212B32;border-radius:6px;padding:20px;box-shadow:0 1px 2px rgba(0,32,80,0.18),0 10px 28px -14px rgba(0,32,80,0.45);font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif}.ds-heading{margin:0;font-size:17px;line-height:24px;font-weight:700;color:#003087}.ds-lead{margin:4px 0 0;font-size:22px;line-height:32px;font-weight:700}"
+    },
+    {
+      "name": "Trial Care Card",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Verdict band with rank and score, mono NCT id, title and rules-confirmed bar.",
+      "html": "<div class=\"ds-ground\"><button class=\"ds-trial\"><span class=\"ds-band\"><span>Rank 1</span><span class=\"ds-sep\" aria-hidden=\"true\">·</span><span>Eligible</span><span class=\"ds-score\">score 4.912</span></span><span class=\"ds-trial-body\"><code class=\"ds-nct\">NCT03641313</code><span class=\"ds-title\">Berzosertib and Irinotecan in Treating Patients With TP53 Mutant Gastric Cancer</span><span class=\"ds-meta\"><span class=\"ds-track\"><span class=\"ds-fill\"></span></span>rules confirmed 92% · 28 rules judged</span></span></button></div>",
+      "css": ".ds-ground{background:#005EB8;padding:24px}.ds-trial{display:block;width:100%;text-align:left;border:0;padding:0;background:#E8EDEE;border-radius:6px;overflow:hidden;cursor:pointer;box-shadow:0 1px 2px rgba(0,32,80,0.18),0 10px 28px -14px rgba(0,32,80,0.45);font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;transition:box-shadow 150ms}.ds-trial:hover{box-shadow:0 0 0 2px rgba(255,255,255,0.7),0 1px 2px rgba(0,32,80,0.18),0 10px 28px -14px rgba(0,32,80,0.45)}.ds-trial:focus-visible{outline:3px solid #FFEB3B;outline-offset:0;box-shadow:0 4px 0 #212B32}.ds-band{display:flex;align-items:center;gap:12px;background:#007F3B;color:#fff;padding:6px 16px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}.ds-sep{opacity:.6}.ds-score{margin-left:auto}.ds-trial-body{display:block;padding:12px 16px 16px}.ds-nct{font-family:'JetBrains Mono',ui-monospace,Consolas,monospace;font-size:14px;font-weight:700;color:#005EB8}.ds-title{display:block;margin-top:4px;font-size:16px;line-height:24px;font-weight:700;color:#212B32}.ds-meta{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:13px;color:#4C6272;font-variant-numeric:tabular-nums}.ds-track{width:112px;height:6px;border-radius:9999px;background:#AEB7BD;overflow:hidden}.ds-fill{display:block;width:92%;height:100%;background:#007F3B;border-radius:9999px}"
+    },
+    {
+      "name": "Evidence Highlight",
+      "kind": "custom",
+      "refersTo": "tag-citation-selected",
+      "description": "Numbered note sentences; the cited one fills aqua pale under an aqua stroke.",
+      "html": "<ol class=\"ds-note\"><li class=\"ds-sent ds-on\"><span class=\"ds-num\">1</span>58-year-old woman with stage IV gastric adenocarcinoma, HER2-positive.</li><li class=\"ds-sent\"><span class=\"ds-num\">2</span>ECOG performance status 1. No brain metastases.</li></ol>",
+      "css": ".ds-note{list-style:none;margin:0;padding:12px;background:#E8EDEE;border-radius:6px;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif}.ds-sent{display:flex;gap:12px;padding:10px 12px;border-radius:4px;font-size:15px;line-height:24px;color:#212B32;transition:background-color 200ms}.ds-sent:hover{background:#D8DDE0}.ds-sent.ds-on{background:#D2EEFA;box-shadow:inset 0 0 0 2px #41B6E6;font-weight:600}.ds-num{display:flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;box-sizing:border-box;border-radius:4px;background:#005EB8;color:#fff;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}.ds-on .ds-num{background:#41B6E6;color:#212B32}"
+    },
+    {
+      "name": "Disclaimer",
+      "kind": "custom",
+      "refersTo": "disclaimer",
+      "description": "Calm warning callout on every page; the one use of warm yellow.",
+      "html": "<div class=\"ds-ground\"><div class=\"ds-disclaimer\" role=\"note\"><strong>Decision support, not medical advice.</strong> Beacon ranks clinical trials for review by a qualified person. All patient data shown here is <strong>synthetic</strong>.</div></div>",
+      "css": ".ds-ground{background:#005EB8;padding:24px}.ds-disclaimer{background:#FFF8E1;border-top:4px solid #FFB81C;padding:12px 16px;color:#212B32;font-family:'Noto Sans',system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:24px;box-shadow:0 1px 2px rgba(0,32,80,0.18),0 10px 28px -14px rgba(0,32,80,0.45)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Blue Working Frame",
+    "overview": "The whole page is drenched in NHS blue, and the work sits on it as pale grey panels: a note to paste, a pipeline to watch, a ranked list of care cards to read. Nothing floats on white. The blue is the room, the panels are the paper on the desk, and every other colour on screen means something specific: a verdict, a citation, a warning, or where the keyboard is.\n\nThe register is a public-service working tool, not a SaaS dashboard and not a dark AI console. Type is plain Noto Sans, bold where it labels and regular where it explains, with sentence-case headings and tabular figures for every rank, score and percentage. Density is moderate: panels carry generous 20 to 24px padding, while the trial list is tight enough to scan twenty results by colour band, rank and score in one pass.\n\nThe system's signature is the citation link: a rule in a trial card carries a pale-aqua reference tag, and selecting it lights the cited sentence in the numbered note with the same aqua. Aqua is spent on nothing else, which is why the eye finds it instantly.",
+    "keyCharacteristics": [
+      "NHS-blue page ground, NHS dark-blue header, pale-grey panels; white only inside inputs.",
+      "Verdict colour is semantic and fixed: green eligible / met, light green likely eligible, neutral grey insufficient info, red excluded / not met.",
+      "Aqua is reserved for citations and the selected rule or trial.",
+      "NHS.UK frontend conventions carried verbatim: the green button with a pressed bottom edge, and the yellow focus state with a dark underline.",
+      "Square-ish 4px corners; no gradients, no glow, no glass."
+    ],
+    "rules": [
+      {
+        "name": "The Never-White Rule",
+        "body": "Panels are Panel Grey on the blue ground. Only text inputs and textareas are white; no card, section or modal is.",
+        "section": "colors"
+      },
+      {
+        "name": "The Abstention Rule",
+        "body": "Insufficient info is neutral grey with ink text and a thin slate inset ring. Never amber, never red, never a warning glyph. It is a designed outcome, not a failure.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reserved Aqua Rule",
+        "body": "Aqua means \"this is cited\" or \"this is selected\". It does not decorate, label or highlight anything else.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Warning Edge Rule",
+        "body": "Warm yellow belongs to the disclaimer. It is the only standing warning on the page.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sentence-Case Heading Rule",
+        "body": "Headings are bold sentence case. There is no tracked, uppercase label above a heading anywhere in the system.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every rank, score, percentage, count, cost and duration uses tabular numerals so columns of numbers align.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Lift Rule",
+        "body": "Panels get the panel lift and nothing else does. No glow, no layered elevations, no backdrop blur.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put every panel in Panel Grey on the NHS Blue ground, with the panel lift and 6px corners.",
+      "**Do** draw verdicts only in their fixed colours: green eligible / met, light green with ink text for likely eligible, neutral grey with an inset slate ring for insufficient info, red excluded / not met.",
+      "**Do** use the NHS.UK primary button: green, white bold text, `0 4px 0 #00401E` edge that shortens to 2px when pressed.",
+      "**Do** use the single NHS focus state (3px yellow outline, 4px dark underline) on every focusable element.",
+      "**Do** set ids and raw data in JetBrains Mono and every number in tabular figures.",
+      "**Do** write headings as bold sentence case in NHS Dark Blue on panels, white on the blue ground.",
+      "**Do** honour reduced motion: transitions collapse and the note scrolls without smoothing."
+    ],
+    "donts": [
+      "**Don't** make a card, panel or section white; only inputs are white.",
+      "**Don't** colour insufficient info amber or red, or give it a warning glyph.",
+      "**Don't** use aqua for anything other than citations and the selected rule or trial.",
+      "**Don't** use warm yellow outside the disclaimer.",
+      "**Don't** add gradients, glow, glass or backdrop blur.",
+      "**Don't** put a tracked uppercase label above a heading.",
+      "**Don't** add a second ambient shadow or a hard offset shadow beyond the button edge and the focus underline."
+    ]
+  }
+}

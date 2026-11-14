@@ -20,7 +20,7 @@ from gateway.testing import FakeRedis, FakeSession, FakeSessionmaker
 
 @pytest.fixture
 def client_parts() -> Iterator[tuple[TestClient, FakeSession, FakeRedis]]:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     session = FakeSession(rows={("MatchRun", "known"): MatchRun(id="known", status="queued")})
     redis = FakeRedis()
     app.dependency_overrides[provide_sessionmaker] = lambda: FakeSessionmaker(session)
@@ -48,7 +48,7 @@ def test_health_reports_both_dependencies_ok(
 
 
 def test_health_is_503_and_names_the_broken_dependency() -> None:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     session = FakeSession()
     redis = FakeRedis(ping_error=ConnectionError("connection refused"))
     app.dependency_overrides[provide_sessionmaker] = lambda: FakeSessionmaker(session)
@@ -66,7 +66,7 @@ def test_health_is_503_and_names_the_broken_dependency() -> None:
 
 
 def test_a_broken_postgres_does_not_hide_a_healthy_redis() -> None:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     session = FakeSession()
     session.fail_on_execute = OSError("could not translate host name")
     redis = FakeRedis()

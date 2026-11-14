@@ -17,6 +17,12 @@ this handles, all of which appear in TREC:
 
 * ``Inclusion Criteria:`` / ``Exclusion Criteria:`` headers, in any case, with
   or without a colon, sometimes prefixed ("Key Inclusion Criteria").
+* One combined header over a single list - ``Inclusion Criteria/Exclusion
+  Criteria:``, ``Inclusion/Exclusion Criteria:``, ``Inclusion and Exclusion
+  Criteria:`` - about 1.2% of the corpus. It is read as a neutral wrapper, so
+  the list is filed as inclusion (see the safe default below). Before this was
+  handled, the ``Exclusion Criteria:`` inside the header filed every rule as an
+  exclusion, and a requirement the patient *met* excluded the trial.
 * Bulleted items: ``-``, ``*``, ``•``, ``o``.
 * Numbered items: ``1.``, ``1)``, ``(1)``, ``i.``, ``a)``.
 * No markers at all - one criterion per line, or one per sentence.
@@ -54,6 +60,14 @@ _NUMBERED = re.compile(r"^\s*\(?(?:\d{1,2}|[ivxIVX]{1,4}|[a-hA-H])[.)]\s+")
 _INLINE_HEADER = re.compile(
     r"(?P<kind>inclusion|exclusion)(?:\s+criteri(?:a|on))?\s*:", re.IGNORECASE
 )
+_COMBINED_HEADER = re.compile(
+    r"inclusion(?:\s+criteri(?:a|on))?\s*(?:/|&|\+|\band\b)\s*exclusion(?:\s+criteri(?:a|on))?\s*:?",
+    re.IGNORECASE,
+)
+"""``Inclusion Criteria/Exclusion Criteria:`` and its variants: one header that
+introduces one list, not two sections. Must be rewritten before
+:data:`_INLINE_HEADER` runs, which would otherwise find ``Exclusion Criteria:``
+inside it and file the whole list as exclusions."""
 _WHITESPACE = re.compile(r"\s+")
 _MIN_CRITERION_CHARS = 8
 """Below this a line is a fragment ("Age:", "Both") rather than a rule."""
@@ -99,7 +113,11 @@ def _explode_inline_headers(text: str) -> str:
     Plenty of records carry the whole eligibility section as one paragraph. If
     the header stays inline, every exclusion rule in the record is filed as an
     inclusion rule, which inverts the verdict for that trial.
+
+    A combined header is turned into the neutral ``eligibility criteria:``
+    first, so :data:`_GENERIC_HEADER` files its list as inclusion.
     """
+    text = _COMBINED_HEADER.sub("\neligibility criteria:\n", text)
     return _INLINE_HEADER.sub(lambda m: f"\n{m.group('kind')} criteria:\n", text)
 
 

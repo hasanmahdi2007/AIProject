@@ -145,3 +145,18 @@ def test_ranking_puts_verdict_first_and_retrieval_last() -> None:
     assert final_score(eligible_last_retrieved, retrieval_rank=1) > final_score(
         eligible_last_retrieved, retrieval_rank=2
     )
+
+
+def test_score_is_out_of_five_with_one_band_per_verdict() -> None:
+    def scored(label: str, kind: str = "inclusion", rank: int = 1) -> float:
+        judgment = derive_trial_judgment(
+            nct_id="A", judgments=[_judgment("a", kind, label)], note=NOTE
+        )
+        return final_score(judgment, retrieval_rank=rank)
+
+    # Every rule confirmed, retrieved first: the top of the scale, exactly.
+    assert scored("met") == 5.0
+    # Excluded by its only rule: the bottom band, never negative.
+    assert 0.0 <= scored("not_met", rank=10) < 1.25
+    # Unknown on its only rule: the insufficient-info band.
+    assert 1.25 <= scored("insufficient_info") < 2.5

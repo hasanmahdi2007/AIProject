@@ -36,6 +36,7 @@ from beacon_core.schemas import (
 
 __all__ = [
     "CATEGORY_WEIGHT",
+    "SCORE_MAX",
     "citations_valid",
     "derive_trial_judgment",
     "final_score",
@@ -147,12 +148,36 @@ def derive_trial_judgment(
     )
 
 
+SCORE_MAX = 5.0
+"""The top of the displayed scale. Each verdict owns one quarter of it:
+
+=====================  ============
+``eligible``           3.75 - 5.00
+``likely_eligible``    2.50 - 3.75
+``insufficient_info``  1.25 - 2.50
+``excluded``           0.00 - 1.25
+=====================  ============
+
+and the position inside a band is the share of rules confirmed."""
+
+_BEST_RANK_TERM = 1.0 / 61.0
+"""The rank term of the first retrieved trial, subtracted so that an eligible
+trial with every rule confirmed, retrieved first, scores exactly 5."""
+
+
 def final_score(judgment: TrialJudgment, *, retrieval_rank: int | None) -> float:
-    """Ranking score: verdict first, then evidence, then retrieval order.
+    """Ranking score out of 5: verdict first, then evidence, then retrieval order.
+
+    ``raw = category weight (0-3) + confirmed fraction (0-1) + 1/(60 + rank)``
+    is what decides the order. It is then shifted and scaled onto 0-5 for
+    people to read. Both steps are monotone, so the order is exactly what the
+    raw sum gives; only the numbers on screen change.
 
     Retrieval contributes a deliberately tiny term. It decides ties and nothing
     else: a similarity score is evidence that a trial is about the right
     disease, never evidence that the patient qualifies for it.
     """
     rank_term = 0.0 if retrieval_rank is None else 1.0 / (60.0 + retrieval_rank)
-    return round(CATEGORY_WEIGHT[judgment.category] + judgment.confirmed_fraction + rank_term, 6)
+    raw = CATEGORY_WEIGHT[judgment.category] + judgment.confirmed_fraction + rank_term
+    scale = SCORE_MAX / (CATEGORY_WEIGHT["eligible"] + 1.0)
+    return round(max(0.0, scale * (raw - _BEST_RANK_TERM)), 6)

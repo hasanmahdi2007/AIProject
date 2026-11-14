@@ -31,7 +31,7 @@ def session() -> FakeSession:
 
 @pytest.fixture
 def client(session: FakeSession) -> Iterator[TestClient]:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     app.dependency_overrides[provide_sessionmaker] = lambda: FakeSessionmaker(session)
     with TestClient(app) as test_client:
         yield test_client

@@ -109,7 +109,7 @@ export const FIXTURE_PROFILE: PatientProfile = {
 const TRIALS: RankedTrial[] = [
   {
     rank: 1,
-    score: 0.912,
+    score: 3.334,
     candidate: {
       nct_id: "NCT05123456",
       title:
@@ -199,7 +199,7 @@ const TRIALS: RankedTrial[] = [
   },
   {
     rank: 2,
-    score: 0.617,
+    score: 1.749,
     candidate: {
       nct_id: "NCT04987654",
       title:
@@ -282,7 +282,7 @@ const TRIALS: RankedTrial[] = [
   },
   {
     rank: 3,
-    score: 0.208,
+    score: 0.623,
     candidate: {
       nct_id: "NCT03456789",
       title:

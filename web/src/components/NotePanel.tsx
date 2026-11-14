@@ -32,7 +32,8 @@ export function NotePanel({
 
   useEffect(() => {
     if (key === "") return;
-    firstRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    firstRef.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
   }, [key]);
 
   const active = new Set(highlighted);
@@ -47,18 +48,16 @@ export function NotePanel({
     note === null ? [] : highlighted.filter((id) => !known.has(id));
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <header className="border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Patient note, as the system numbered it
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
+    <section className="card overflow-hidden">
+      <header className="border-b border-nhs-line px-5 pb-3 pt-4">
+        <h2 className="heading">Patient note, as the system numbered it</h2>
+        <p className={`mt-1 text-[14px] leading-6 ${caption ? "font-semibold text-[#00445E]" : "text-nhs-mid"}`}>
           {caption ?? "Click any rule in a trial to highlight the sentence it was decided on."}
         </p>
       </header>
 
       {sentences.length > 0 ? (
-        <ol className="divide-y divide-slate-100">
+        <ol className="space-y-1 p-3">
           {sentences.map((sentence) => {
             const on = active.has(sentence.sentence_id);
             const isFirst = on && sentence.sentence_id === highlighted[0];
@@ -67,22 +66,18 @@ export function NotePanel({
                 key={sentence.sentence_id}
                 ref={isFirst ? firstRef : null}
                 aria-current={on ? "true" : undefined}
-                className={`flex gap-3 px-4 py-2 transition-colors ${
-                  on ? "evidence-on" : ""
+                className={`flex gap-3 rounded px-3 py-2.5 transition-colors duration-200 ${
+                  on ? "evidence-on" : "hover:bg-nhs-pale"
                 }`}
               >
                 <span
-                  className={`w-6 shrink-0 select-none pt-0.5 text-right text-xs font-mono ${
-                    on ? "font-bold text-amber-900" : "text-slate-400"
+                  className={`mt-px flex h-6 min-w-6 shrink-0 select-none items-center justify-center rounded px-1.5 text-[13px] font-bold tabular ${
+                    on ? "bg-nhs-aqua text-nhs-ink" : "bg-nhs-blue text-white"
                   }`}
                 >
                   {sentence.sentence_id}
                 </span>
-                <span
-                  className={`text-sm leading-6 ${
-                    on ? "font-medium text-slate-900" : "text-slate-700"
-                  }`}
-                >
+                <span className={`text-[15px] leading-6 ${on ? "font-semibold text-nhs-ink" : "text-nhs-ink"}`}>
                   {sentence.text}
                 </span>
               </li>
@@ -90,8 +85,8 @@ export function NotePanel({
           })}
         </ol>
       ) : (
-        <div className="space-y-2 px-4 py-4">
-          <p className="text-sm text-slate-600">
+        <div className="space-y-2 px-5 py-4">
+          <p className="text-[14px] leading-6 text-nhs-mid">
             {note === null
               ? "The worker has not split this note into sentences yet, so citations cannot be resolved against it. This is a normal in-flight state, not a problem with the run."
               : "The run returned a note containing no sentences, so there is nothing for a citation to point at."}{" "}
@@ -100,7 +95,7 @@ export function NotePanel({
             from the ones the rules cite.
           </p>
           {rawFallback ? (
-            <p className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+            <p className="whitespace-pre-wrap rounded bg-nhs-pale p-3.5 text-[15px] leading-6 text-nhs-ink">
               {rawFallback}
             </p>
           ) : null}
@@ -108,17 +103,14 @@ export function NotePanel({
       )}
 
       {unresolved.length > 0 ? (
-        <div
-          role="alert"
-          className="border-t-2 border-rose-400 bg-rose-50 px-4 py-3"
-        >
-          <p className="text-sm font-semibold text-rose-900">
+        <div role="alert" className="border-t-4 border-nhs-red bg-[#FBE7E5] px-5 py-3.5">
+          <p className="text-[14px] font-bold text-nhs-red">
             Invalid citation: sentence{" "}
             {unresolved.length === 1 ? "" : "s "}
             {unresolved.join(", ")} {unresolved.length === 1 ? "does" : "do"} not
             exist in this note.
           </p>
-          <p className="mt-1 text-sm text-rose-900">
+          <p className="mt-1 text-[14px] leading-6 text-nhs-ink">
             The selected rule cites {unresolved.length === 1 ? "an" : ""}{" "}
             sentence {unresolved.length === 1 ? "id" : "ids"} outside the
             numbered note, so the evidence cannot be shown and the rule&apos;s

@@ -280,7 +280,7 @@ class TestRerank:
         reranker = StubCrossEncoder(scores={})
         service, _ = build_service(ONE_QUERY_BRANCHES, cross_encoder=reranker)
 
-        await service.search(one_query(rerank_top_k=2))
+        await service.search(one_query(rerank_top_k=2, use_rerank=True))
 
         assert reranker.calls == [("metastatic melanoma", 4)]
 
@@ -298,6 +298,7 @@ class TestRerank:
                 RankedQuery(rank=2, text="secondary facet"),
                 RankedQuery(rank=1, text="primary diagnosis"),
             ],
+            use_rerank=True,
         )
 
         await service.search(request)

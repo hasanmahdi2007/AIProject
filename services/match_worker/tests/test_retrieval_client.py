@@ -30,7 +30,7 @@ def test_request_carries_the_filters_and_keeps_unknowns_eligible() -> None:
     # A trial whose age bounds are absent must survive the filter: unknown
     # means "possibly eligible", and a wrongly excluded trial is invisible.
     assert request.filters.include_unknown is True
-    assert request.rerank_top_k == 20
+    assert request.rerank_top_k == 10
     assert request.rrf_k == 60
 
 

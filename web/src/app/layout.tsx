@@ -1,8 +1,22 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { JetBrains_Mono, Noto_Sans } from "next/font/google";
 import { Disclaimer } from "@/components/Disclaimer";
+import { NavLinks } from "@/components/NavLinks";
 import "./globals.css";
+
+const sans = Noto_Sans({
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "800"],
+  variable: "--font-sans",
+  display: "swap",
+});
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Beacon console",
@@ -14,31 +28,23 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
-      <body className="min-h-screen">
-        <Disclaimer />
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-6xl items-baseline gap-6 px-4 py-3">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Beacon
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <body className="min-h-screen font-sans">
+        <header className="bg-nhs-dark">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-end gap-x-6 gap-y-2 px-4 pt-3 sm:px-6">
+            <Link href="/" className="mb-3 flex items-center gap-3">
+              <span className="rounded-sm bg-white px-2.5 py-1 text-[22px] font-extrabold leading-7 tracking-tight text-nhs-dark">
+                Beacon
+              </span>
+              <span className="text-[15px] leading-5 text-white">
+                clinical-trial matching, with its reasoning shown
+              </span>
             </Link>
-            <span className="text-sm text-slate-500">
-              clinical-trial matching, with its reasoning shown
-            </span>
-            <nav className="ml-auto flex gap-4 text-sm">
-              <Link href="/" className="text-slate-600 hover:text-slate-900">
-                Console
-              </Link>
-              <Link
-                href="/about"
-                className="text-slate-600 hover:text-slate-900"
-              >
-                How to read this
-              </Link>
-            </nav>
+            <NavLinks />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <Disclaimer />
+        <main className="mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6">{children}</main>
       </body>
     </html>
   );

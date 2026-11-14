@@ -16,6 +16,7 @@ from evals.ablations import (
     ABLATION_TABLE,
     AGE_FILTER_CENSUS,
     BASELINE_CONFIG,
+    FREE_ABLATION_TABLE,
     FULL_SYSTEM,
     QUERY_COUNT_SWEEP,
     RunConfig,
@@ -80,6 +81,10 @@ def test_the_table_is_cumulative_from_the_query_generation_row_on() -> None:
     assert not ABLATION_TABLE[3].use_rerank
     assert ABLATION_TABLE[5].use_rerank
     assert not ABLATION_TABLE[5].apply_age_sex_filters
+    # Rerank is a measured branch, off in production: filters build on row 5's
+    # parent (N=3 queries, no rerank), and so does the full system.
+    assert not ABLATION_TABLE[6].use_rerank
+    assert not FULL_SYSTEM.use_rerank
     assert ABLATION_TABLE[6].apply_age_sex_filters
     assert not ABLATION_TABLE[6].llm_rule_matching
     assert FULL_SYSTEM.llm_rule_matching
@@ -114,9 +119,9 @@ def test_reranking_more_than_was_fused_is_rejected() -> None:
         RunConfig(name="x", description="", fuse_top_k=10, rerank_top_k=20)
 
 
-def test_the_pipeline_shape_is_375k_to_100_to_20() -> None:
+def test_the_pipeline_shape_is_375k_to_100_to_10() -> None:
     assert FULL_SYSTEM.fuse_top_k == 100
-    assert FULL_SYSTEM.rerank_top_k == 20
+    assert FULL_SYSTEM.rerank_top_k == 10
     assert FULL_SYSTEM.rrf_k == 60
 
 
@@ -127,8 +132,8 @@ def test_to_search_request_renders_the_frozen_contract() -> None:
     filters = AgeSexFilter(age=45, sex="male")
     request = FULL_SYSTEM.to_search_request(queries, filters)
     assert request.fuse_top_k == 100
-    assert request.rerank_top_k == 20
-    assert request.use_rerank is True
+    assert request.rerank_top_k == 10
+    assert request.use_rerank is False
     assert request.filters.age == 45
     assert request.filters.include_unknown is True
 
@@ -151,6 +156,41 @@ def test_to_search_request_rejects_the_wrong_number_of_queries() -> None:
 
     with pytest.raises(ValueError, match="expected 3 quer"):
         FULL_SYSTEM.to_search_request([RankedQuery(rank=1, text="q")], AgeSexFilter())
+
+
+# ------------------------------------------------------ the free table ----
+
+
+def test_every_row_of_the_free_table_needs_no_llm() -> None:
+    """The claim FREE_ABLATION_TABLE's docstring makes, checked rather than
+    trusted: running any of these rows must cost $0.00 of Anthropic spend."""
+    assert FREE_ABLATION_TABLE, "the free table must not be empty"
+    for config in FREE_ABLATION_TABLE:
+        assert not config.requires_llm, f"{config.name} would bill the API"
+        assert config.query_count == 1, f"{config.name} searches with more than the note"
+
+
+def test_the_free_table_measures_every_free_component() -> None:
+    """Sparse, dense, fusion, rerank and filters each appear in some free row."""
+    rows = {config.name: config for config in FREE_ABLATION_TABLE}
+    assert [c.name for c in FREE_ABLATION_TABLE] == [
+        "bm25_only",
+        "dense_only",
+        "hybrid_rrf",
+        "plus_rerank_no_llm",
+        "plus_age_sex_filters_no_llm",
+    ]
+    assert rows["plus_rerank_no_llm"].use_rerank
+    assert not rows["plus_rerank_no_llm"].apply_age_sex_filters
+    assert rows["plus_age_sex_filters_no_llm"].apply_age_sex_filters
+
+
+def test_requires_llm_matches_the_paid_rows_of_the_cumulative_table() -> None:
+    """Only the first three cumulative rows are free; the rest stack on LLM
+    query generation even when the component they add is a local model."""
+    free = [config.name for config in ABLATION_TABLE if not config.requires_llm]
+    assert free == ["bm25_only", "dense_only", "hybrid_rrf"]
+    assert FULL_SYSTEM.requires_llm
 
 
 # ----------------------------------------------------------------- sweep ----

@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from typing import Any, Final, cast
 
 import anthropic
@@ -31,6 +31,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from beacon_core.events import TOPIC_MATCH_COMPLETED, TOPIC_MATCH_REQUESTED, MatchRequested
+from beacon_core.logging import get_logger
 from beacon_core.models import (
     CriterionJudgmentRow,
     MatchRun,
@@ -71,6 +72,8 @@ from gateway.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_sse, heartbeat
 __all__ = ["router"]
 
 router = APIRouter()
+
+log = get_logger(__name__)
 
 TERMINAL_STATUSES: Final[frozenset[str]] = frozenset({"completed", "failed"})
 
@@ -403,6 +406,24 @@ async def _load_run(maker: async_sessionmaker[AsyncSession], match_id: str) -> M
         )
 
 
+async def _refresh_quietly(
+    refresh: Callable[[], Awaitable[MatchStatusSnapshot]] | None, match_id: str
+) -> MatchStatusSnapshot | None:
+    """One Postgres re-read for the SSE fallback. A failure skips this beat.
+
+    A database blip must not end a stream that pub/sub may still complete, so
+    any error - including the 404 of a run deleted mid-stream - is logged and
+    read as "no news", and the next heartbeat tries again.
+    """
+    if refresh is None:
+        return None
+    try:
+        return await refresh()
+    except Exception as exc:
+        log.warning("gateway.sse.refresh_failed", match_id=match_id, error=str(exc))
+        return None
+
+
 def _decode_event(data: Any) -> dict[str, Any] | None:
     raw = data.decode("utf-8") if isinstance(data, bytes) else data
     if not isinstance(raw, str):
@@ -421,11 +442,22 @@ async def _match_event_stream(
     request: Request,
     *,
     heartbeat_seconds: float = HEARTBEAT_SECONDS,
+    refresh: Callable[[], Awaitable[MatchStatusSnapshot]] | None = None,
 ) -> AsyncIterator[str]:
     """Forward ``chan:match:{id}`` to one browser as typed SSE events.
 
-    The channel is why this works behind more than one replica: the worker
-    publishes once and whichever gateway holds the connection relays it.
+    The channel is why this works behind more than one replica:
+    ``gateway.bridge`` publishes each worker event once and whichever gateway
+    holds the connection relays it.
+
+    ``refresh`` re-reads the run from Postgres on every quiet heartbeat. Pub/sub
+    is fire-and-forget, so an event published while nobody was subscribed - the
+    gap between the snapshot read and the subscribe, a gateway restart, the
+    bridge being down - is simply gone. Without the re-read, missing the one
+    ``completed`` event left the console on "Queued" forever; with it, the
+    worst case is one heartbeat of latency. A changed step is sent as a fresh
+    ``status`` frame, and a terminal status ends the stream exactly as a live
+    ``completed`` event would.
     """
     try:
         yield format_sse("status", snapshot.model_dump(mode="json"))
@@ -438,6 +470,13 @@ async def _match_event_stream(
                 ignore_subscribe_messages=True, timeout=heartbeat_seconds
             )
             if message is None:
+                latest = await _refresh_quietly(refresh, match_id)
+                if latest is not None and latest != snapshot:
+                    snapshot = latest
+                    yield format_sse("status", snapshot.model_dump(mode="json"))
+                    if snapshot.status in TERMINAL_STATUSES:
+                        yield format_sse("done", {"match_id": match_id, "status": snapshot.status})
+                        return
                 yield heartbeat()
                 continue
 
@@ -490,7 +529,13 @@ async def match_events(
     await pubsub.subscribe(chan_match(match_id))
 
     return StreamingResponse(
-        _match_event_stream(match_id, snapshot, pubsub, request),
+        _match_event_stream(
+            match_id,
+            snapshot,
+            pubsub,
+            request,
+            refresh=lambda: _load_run(maker, match_id),
+        ),
         media_type=SSE_MEDIA_TYPE,
         headers={**SSE_HEADERS, "X-Match-Id": match_id},
     )

@@ -7,6 +7,8 @@ answers anyway.
 
 from __future__ import annotations
 
+import pytest
+
 from match_worker.rules import criterion_id_for, split_eligibility
 
 
@@ -74,6 +76,51 @@ def test_run_on_paragraph_with_inline_header_is_not_filed_as_inclusion() -> None
     exclusions = [p.text for p in parsed if p.kind == "exclusion"]
     assert "Pregnant or nursing patients." in exclusions
     assert "Active infection." in exclusions
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Inclusion Criteria/Exclusion Criteria:",
+        "Inclusion/Exclusion Criteria:",
+        "Inclusion and Exclusion Criteria:",
+        "INCLUSION & EXCLUSION CRITERIA",
+    ],
+)
+def test_a_combined_header_files_its_list_as_inclusion(header: str) -> None:
+    """One header over one list is a wrapper, not an exclusion section.
+
+    Regression for NCT02491775: the ``Exclusion Criteria:`` inside the combined
+    header filed all nine requirements as exclusions, so "At least 18 years of
+    age" - which the patient met - excluded the trial.
+    """
+    parsed = split_eligibility(
+        "NCT09",
+        f"{header}\n\n"
+        "  -  Diagnosis of metastatic stage IIIB/IV lung adenocarcinoma\n\n"
+        "  -  Not pregnant or breastfeeding\n\n"
+        "  -  At least 18 years of age\n",
+    )
+    assert [p.kind for p in parsed] == ["inclusion"] * 3
+    assert _texts(list(parsed)) == [
+        "Diagnosis of metastatic stage IIIB/IV lung adenocarcinoma",
+        "Not pregnant or breastfeeding",
+        "At least 18 years of age",
+    ]
+
+
+def test_a_combined_header_still_yields_to_a_real_exclusion_section() -> None:
+    parsed = split_eligibility(
+        "NCT10",
+        "Inclusion/Exclusion Criteria:\n"
+        "- At least 18 years of age\n"
+        "Exclusion Criteria:\n"
+        "- Active infection\n",
+    )
+    assert [(p.kind, p.text) for p in parsed] == [
+        ("inclusion", "At least 18 years of age"),
+        ("exclusion", "Active infection"),
+    ]
 
 
 def test_unmarked_sentences_split_on_sentence_boundaries() -> None:

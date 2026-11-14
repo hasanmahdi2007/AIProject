@@ -54,7 +54,7 @@ def build_client(
     *,
     rows: dict[tuple[str, str], Any] | None = None,
 ) -> TestClient:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     session = FakeSession(
         rows=rows
         if rows is not None

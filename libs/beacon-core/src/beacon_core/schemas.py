@@ -243,9 +243,9 @@ class SearchRequest(Contract):
     queries: list[RankedQuery] = Field(min_length=1)
     filters: AgeSexFilter = Field(default_factory=AgeSexFilter)
     fuse_top_k: int = Field(default=100, ge=1, description="candidates kept after RRF")
-    rerank_top_k: int = Field(default=20, ge=1, description="candidates kept after rerank")
+    rerank_top_k: int = Field(default=10, ge=1, description="candidates kept after rerank")
     rrf_k: int = Field(default=60, ge=1, description="RRF constant; rank-based, not score-based")
-    use_rerank: bool = True
+    use_rerank: bool = False
 
 
 class SearchResponse(Contract):

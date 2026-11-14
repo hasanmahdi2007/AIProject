@@ -342,126 +342,163 @@ export default function ConsolePage() {
     : null;
   const ranksProvisional = result !== null && !isTerminal(result.status);
 
-  return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <label
-          htmlFor="note"
-          className="text-sm font-semibold uppercase tracking-wide text-slate-500"
-        >
-          Synthetic patient note
+  const lookupPanel = (
+    <aside className={`space-y-4 border-t border-nhs-line bg-nhs-pale ${run.started ? "px-5 py-4 sm:px-6" : "p-5 sm:p-6"}`}>
+      <div>
+        <label htmlFor="matchId" className="field-label block">
+          Or open a run by id
         </label>
-        <p className="mt-1 text-sm text-slate-600">
-          Paste a synthetic benchmark note. Do not paste anything about a real
-          person: this is a demo surface with no safeguards for identifiable
-          data.
-        </p>
-        <textarea
-          id="note"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={6}
-          spellCheck={false}
-          placeholder="A 67-year-old woman presents with..."
-          className="mt-2 w-full resize-y rounded border border-slate-300 p-3 font-mono text-sm leading-6 text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-        />
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy || note.trim().length === 0}
-            className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {busy ? "Working…" : "Match trials"}
-          </button>
-          <button
-            type="button"
-            onClick={loadSample}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
-          >
-            Load sample run
-          </button>
-          {run.started ? (
-            <button
-              type="button"
-              onClick={resetRun}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              Clear
-            </button>
-          ) : null}
-          <span className="ml-auto text-xs text-slate-500">
-            gateway <code>{GATEWAY_BASE}</code>
-          </span>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
-          <div className="min-w-0 flex-1">
-            <label
-              htmlFor="matchId"
-              className="text-xs font-medium uppercase tracking-wide text-slate-500"
-            >
-              Or open a run by id
-            </label>
-            <input
-              id="matchId"
-              value={lookupId}
-              onChange={(event) => setLookupId(event.target.value)}
-              spellCheck={false}
-              placeholder="match id from an earlier submission"
-              className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
-          </div>
+        <div className="mt-2 flex gap-2">
+          <input
+            id="matchId"
+            value={lookupId}
+            onChange={(event) => setLookupId(event.target.value)}
+            spellCheck={false}
+            placeholder="match id from an earlier submission"
+            className="field min-w-0 flex-1 px-3 py-2 font-mono text-[13px] placeholder:font-sans placeholder:text-[14px]"
+          />
           <button
             type="button"
             onClick={openExisting}
             disabled={busy || lookupId.trim().length === 0}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="btn-secondary shrink-0"
           >
             {run.loading ? "Reading…" : "Open run"}
           </button>
         </div>
+      </div>
 
-        {submitError ? (
-          <p className="mt-3 rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
-            Could not submit the note. {submitError}
-          </p>
-        ) : null}
+      {run.started ? null : (
+      <dl className="space-y-2.5 text-[14px] leading-5 text-nhs-ink">
+        <div className="flex gap-2.5">
+          <dt className="shrink-0">
+            <span className="tag bg-nhs-green text-white">free</span>
+          </dt>
+          <dd>
+            &ldquo;Load sample run&rdquo; replays a saved run through the
+            same screens a live run uses.
+          </dd>
+        </div>
+        <div className="flex gap-2.5">
+          <dt className="shrink-0">
+            <span className="tag bg-nhs-dark text-white tabular">≈ $0.10</span>
+          </dt>
+          <dd>
+            &ldquo;Match trials&rdquo; runs the real pipeline and calls
+            Claude about 47 times (Haiku; about $0.40 if the worker runs
+            the rule checks on Sonnet).
+          </dd>
+        </div>
+      </dl>
+      )}
 
-        <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
-          <strong className="font-semibold text-slate-600">
-            Sample run vs live run.
-          </strong>{" "}
-          &ldquo;Load sample run&rdquo; replays a committed fixture through the
-          same event handling and the same result shape a live run uses, so the
-          console is demonstrable while the retrieval service and match worker
-          are still being built. &ldquo;Match trials&rdquo; and &ldquo;Open
-          run&rdquo; call the real gateway.
+      {run.started ? null : (
+      <p className="text-[13px] text-nhs-mid">
+        gateway{" "}
+        <code className="rounded bg-nhs-panel px-1.5 py-0.5 font-mono text-nhs-ink">{GATEWAY_BASE}</code>
+      </p>
+      )}
+    </aside>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="max-w-3xl">
+        <h1 className="text-[40px] font-extrabold leading-[48px] tracking-tight text-white">
+          Find clinical trials for a patient
+        </h1>
+        <p className="mt-2 text-[17px] leading-7 text-white/90">
+          Paste a note. Beacon searches ClinicalTrials.gov, checks every
+          eligibility rule against the note, and shows the sentence behind
+          each verdict.
         </p>
-      </section>
+      </div>
 
-      {run.started ? (
-        <>
-          <ProgressRail
-            status={run.status}
-            currentStep={run.currentStep}
-            pct={run.pct}
-            message={run.message}
-            matchId={run.matchId}
-            seen={run.seen}
-          />
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="space-y-6 lg:self-stretch">
+          <section className="card overflow-hidden">
+            <div className="p-5 sm:p-6">
+              <label htmlFor="note" className="field-label block">
+                Synthetic patient note
+              </label>
+              <p className="mt-0.5 text-[14px] leading-5 text-nhs-mid">
+                Synthetic benchmark notes only. Do not paste anything about a real
+                person: this is a demo surface with no safeguards for
+                identifiable data.
+              </p>
+              <textarea
+                id="note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={run.started ? 3 : 6}
+                spellCheck={false}
+                placeholder="A 67-year-old woman presents with..."
+                className="field mt-3 resize-y p-3.5 text-[15px] leading-7"
+              />
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={busy || note.trim().length === 0}
+                  className="btn-primary"
+                >
+                  {busy ? "Working…" : "Match trials"}
+                </button>
+                <button type="button" onClick={loadSample} className="btn-secondary">
+                  Load sample run
+                </button>
+                {run.started ? (
+                  <button type="button" onClick={resetRun} className="btn-secondary">
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+
+              {submitError ? (
+                <p className="mt-4 border-4 border-nhs-red bg-[#FBE7E5] p-3.5 text-[14px] leading-6 text-nhs-ink">
+                  <strong className="text-nhs-red">Could not submit the note.</strong> {submitError}
+                </p>
+              ) : null}
+            </div>
+
+            {lookupPanel}
+          </section>
+
+          {result ? (
+            <div className="lg:sticky lg:top-4">
+              <NotePanel
+                note={noteForPanel}
+                highlighted={highlighted}
+                caption={caption}
+                rawFallback={run.submittedNote}
+              />
+            </div>
+          ) : null}
+
+        </div>
+
+        <div className="space-y-6">
+          {run.started ? (
+            <ProgressRail
+              status={run.status}
+              currentStep={run.currentStep}
+              pct={run.pct}
+              message={run.message}
+              matchId={run.matchId}
+              seen={run.seen}
+            />
+          ) : null}
 
           {run.loadError ? (
-            <section className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-              <h2 className="text-sm font-semibold text-amber-900">
-                Could not read this run
-              </h2>
-              <p className="mt-1 text-sm text-amber-900">{run.loadError}</p>
+            <section className="border-t-4 border-nhs-warm bg-nhs-panel p-5 text-nhs-ink shadow-card">
+              <h2 className="heading">Could not read this run</h2>
+              <p className="mt-1 text-[14px] leading-6 text-nhs-ink">{run.loadError}</p>
               {run.matchId ? (
                 <button
                   type="button"
                   onClick={() => void load(run.matchId as string)}
-                  className="mt-2 rounded border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                  className="btn-secondary mt-3"
                 >
                   Try again
                 </button>
@@ -470,12 +507,12 @@ export default function ConsolePage() {
           ) : null}
 
           {run.error ? (
-            <section className="rounded-lg border border-rose-300 bg-rose-50 p-4">
-              <h2 className="text-sm font-semibold text-rose-900">
-                The run failed
-              </h2>
-              <p className="mt-1 text-sm text-rose-900">{run.error.message}</p>
-              <code className="mt-1 block text-xs text-rose-700">
+            <section className="border-4 border-nhs-red bg-nhs-panel p-5 text-nhs-ink shadow-card">
+              <h2 className="text-[19px] font-bold text-nhs-red">The run failed</h2>
+              <p className="mt-1 break-words text-[15px] leading-6 text-nhs-ink">
+                {run.error.message}
+              </p>
+              <code className="mt-2 inline-block rounded bg-[#FBE7E5] px-2 py-0.5 font-mono text-[13px] text-nhs-red">
                 {run.error.code}
               </code>
             </section>
@@ -484,17 +521,17 @@ export default function ConsolePage() {
           {result ? (
             <>
               {ranksProvisional ? (
-                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">
+                <p className="border-t-4 border-nhs-aqua bg-nhs-panel px-4 py-3 text-[14px] leading-6 text-nhs-ink shadow-card">
                   This run is still in flight. Trials whose rules have not been
                   checked yet are listed after the ranked ones and report{" "}
-                  <strong className="font-semibold">insufficient info</strong>,
+                  <strong className="font-bold">insufficient info</strong>,
                   so the order and the verdicts below can still change. Neither
                   is final until the run completes.
                 </p>
               ) : null}
 
               {run.resultIsProvisional ? (
-                <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+                <p className="card px-4 py-3 text-[14px] leading-6 text-nhs-mid">
                   Showing the ranked trials from the completion event while the
                   full run is read back. The patient note arrives with that
                   read, so evidence highlighting turns on a moment later.
@@ -502,37 +539,33 @@ export default function ConsolePage() {
               ) : null}
 
               <ProfileCard profile={result.profile} />
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <div className="lg:sticky lg:top-4 lg:self-start">
-                  <NotePanel
-                    note={noteForPanel}
-                    highlighted={highlighted}
-                    caption={caption}
-                    rawFallback={run.submittedNote}
-                  />
-                </div>
-                <TrialResults
-                  results={results}
-                  openNctId={openNctId}
-                  onToggleTrial={handleToggleTrial}
-                  selectedRuleKey={selectedRuleKey}
-                  onSelectRule={handleSelectRule}
-                  validSentenceIds={validSentenceIds}
-                />
-              </div>
-              <p className="text-xs text-slate-500">
-                {result.trial_count} trial
-                {result.trial_count === 1 ? "" : "s"} returned
-                {result.duration_ms !== null
-                  ? ` · ran in ${Math.round(result.duration_ms)} ms`
-                  : ""}{" "}
-                · model cost ${result.total_cost_usd.toFixed(4)} · match{" "}
-                <code>{result.match_id}</code>
-              </p>
             </>
           ) : null}
-        </>
-      ) : null}
+
+          {!run.started || result ? (
+            <TrialResults
+              results={results}
+              openNctId={openNctId}
+              onToggleTrial={handleToggleTrial}
+              selectedRuleKey={selectedRuleKey}
+              onSelectRule={handleSelectRule}
+              validSentenceIds={validSentenceIds}
+            />
+          ) : null}
+
+          {result ? (
+            <p className="text-[14px] text-white/90 tabular">
+              {result.trial_count} trial
+              {result.trial_count === 1 ? "" : "s"} returned
+              {result.duration_ms !== null
+                ? ` · ran in ${Math.round(result.duration_ms)} ms`
+                : ""}{" "}
+              · model cost ${result.total_cost_usd.toFixed(4)} · match{" "}
+              <code className="font-mono text-white">{result.match_id}</code>
+            </p>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -45,6 +45,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import ValidationError
 
 from beacon_core.events import (
     TOPIC_MATCH_COMPLETED,
@@ -269,8 +270,53 @@ class MatchWorker:
         exception escape and relying on redelivery - would hold the partition
         hostage to one bad message, because an uncommitted offset is redelivered
         forever.
+
+        A message that will not *deserialise* is handled separately and first:
+        see below.
         """
-        event = MatchRequested.model_validate(value)
+        try:
+            event = MatchRequested.model_validate(value)
+        except ValidationError as exc:
+            # A payload that is not a MatchRequested at all is a **permanent**
+            # condition: retrying parses the same bytes and fails identically,
+            # and there is no match_id, so there is no run to mark failed and
+            # nothing _park can write a DLQ event for.
+            #
+            # It must still not escape. Before this guard the exception left
+            # handle_message, killed the consumer loop and took the whole
+            # worker down on startup - and because the offset was never
+            # committed, restarting hit the same message and died again. One
+            # junk message was an unrecoverable outage.
+            #
+            # Found on 9 Nov: a leftover {"probe": "a1-infra"} smoke-test
+            # message from the infrastructure agent sat in match.requested and
+            # crashed the worker on every start.
+            #
+            # So: log it loudly with the payload, and return an outcome whose
+            # offset the caller commits, which drops the message rather than
+            # replaying it forever. Dropping is correct here precisely because
+            # it is undeliverable - it was never a job.
+            log.error(
+                "worker.message_undeserialisable",
+                error=str(exc),
+                payload=value,
+                trace_id=trace_id,
+                detail=(
+                    "not a MatchRequested; offset committed so it cannot block "
+                    "the partition. This is dropped, not retried: the same bytes "
+                    "would fail identically."
+                ),
+            )
+            return RunOutcome(
+                match_id="",
+                status="failed",
+                resumed=False,
+                already_complete=False,
+                trials=0,
+                partial=False,
+                error=f"undeserialisable message: {exc}",
+                cost_usd=0.0,
+            )
         policy = RetryPolicy(
             attempts=self.worker.message_attempts,
             base_seconds=self.worker.message_retry_base_seconds,

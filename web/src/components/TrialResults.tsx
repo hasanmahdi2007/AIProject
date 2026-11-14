@@ -5,6 +5,7 @@ import {
   ELIGIBILITY_CATEGORIES,
   KIND_LABELS,
   formatPercent,
+  formatFinalScore,
   formatScore,
 } from "@/lib/labels";
 import type { CriterionJudgment, RankedTrial } from "@/lib/types";
@@ -29,13 +30,24 @@ export function ruleKey(nctId: string, criterionId: string): string {
   return `${nctId}::${criterionId}`;
 }
 
+/** "NCT03641313:inc:01" reads as "inc:01" inside its own trial's table. */
+function shortRuleId(nctId: string, criterionId: string): string {
+  return criterionId.startsWith(`${nctId}:`) ? criterionId.slice(nctId.length + 1) : criterionId;
+}
+
 function Chip({ className, text }: { className: string; text: string }) {
+  return <span className={`tag ${className}`}>{text}</span>;
+}
+
+function Chevron({ open }: { open: boolean }) {
   return (
-    <span
-      className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium ring-1 ${className}`}
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden
+      className={`h-5 w-5 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
     >
-      {text}
-    </span>
+      <path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -53,27 +65,27 @@ function RuleTable({
   const nctId = trial.candidate.nct_id;
 
   return (
-    <table className="w-full table-fixed border-separate border-spacing-0 text-left text-sm">
-      <caption className="pb-2 text-left text-xs text-slate-500">
+    <table className="w-full max-sm:block sm:table-fixed border-separate border-spacing-0 text-left text-[14px]">
+      <caption className="block px-4 pb-2 sm:table-caption text-left text-[14px] text-nhs-mid">
         Click a rule to highlight the sentence of the note it was decided on.
       </caption>
-      <thead>
-        <tr className="text-xs uppercase tracking-wide text-slate-500">
-          <th scope="col" className="w-20 pb-1 font-medium">
+      <thead className="max-sm:hidden">
+        <tr className="text-[13px] text-nhs-mid">
+          <th scope="col" className="w-20 pb-1.5 pl-4 font-bold">
             Rule
           </th>
-          <th scope="col" className="w-24 pb-1 font-medium">
+          <th scope="col" className="w-24 pb-1.5 font-bold">
             Kind
           </th>
-          <th scope="col" className="w-32 pb-1 font-medium">
+          <th scope="col" className="w-36 pb-1.5 font-bold">
             Verdict
           </th>
-          <th scope="col" className="pb-1 font-medium">
+          <th scope="col" className="pb-1.5 pr-4 font-bold">
             Why, and the sentence it cites
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody className="max-sm:block">
         {trial.judgment.judgments.map((judgment) => {
           const key = ruleKey(nctId, judgment.criterion_id);
           const selected = key === selectedRuleKey;
@@ -102,45 +114,45 @@ function RuleTable({
                   ? `Cites sentence ${cited.join(", ")}.`
                   : "Cites no sentence."
               }`}
-              className={`cursor-pointer align-top transition-colors ${
-                selected
-                  ? "bg-amber-50 outline outline-2 -outline-offset-2 outline-amber-400"
-                  : "hover:bg-slate-50"
+              className={`cursor-pointer align-top transition-colors max-sm:block max-sm:border-t max-sm:border-nhs-line max-sm:px-4 max-sm:py-3 ${
+                selected ? "evidence-on" : "hover:bg-nhs-pale"
               }`}
             >
-              <td className="border-t border-slate-100 py-2 pr-2 font-mono text-xs text-slate-700">
-                {judgment.criterion_id}
+              <td className="font-mono text-[13px] text-nhs-mid max-sm:mr-3 max-sm:inline-block sm:border-t sm:border-nhs-line sm:py-3 sm:pl-4 sm:pr-2" title={judgment.criterion_id}>
+                {shortRuleId(nctId, judgment.criterion_id)}
               </td>
-              <td className="border-t border-slate-100 py-2 pr-2 text-xs text-slate-600">
-                {KIND_LABELS[judgment.kind]}
+              <td className="max-sm:mr-3 max-sm:inline-block sm:border-t sm:border-nhs-line sm:py-3 sm:pr-2">
+                <span
+                  className={`text-[13px] font-bold ${
+                    judgment.kind === "inclusion" ? "text-nhs-dark" : "text-nhs-purple"
+                  }`}
+                >
+                  {KIND_LABELS[judgment.kind]}
+                </span>
               </td>
-              <td className="border-t border-slate-100 py-2 pr-2">
+              <td className="max-sm:inline-block sm:border-t sm:border-nhs-line sm:py-3 sm:pr-2">
                 <Chip className={chip.className} text={chip.text} />
               </td>
-              <td className="border-t border-slate-100 py-2">
-                <p className="leading-6 text-slate-700">
-                  {judgment.explanation}
-                </p>
-                <p className="mt-1 text-xs">
+              <td className="max-sm:mt-2 max-sm:block sm:border-t sm:border-nhs-line sm:py-3 sm:pr-4">
+                <p className="leading-6 text-nhs-ink">{judgment.explanation}</p>
+                <p className="mt-1.5 text-[13px]">
                   {cited.length > 0 ? (
                     <span
-                      className={
-                        selected
-                          ? "font-semibold text-amber-800"
-                          : "text-sky-700"
-                      }
+                      className={`tag ${
+                        selected ? "bg-nhs-aqua text-nhs-ink" : "bg-nhs-aquapale text-[#00445E]"
+                      }`}
                     >
                       Evidence: sentence {cited.join(", ")}
                       {selected ? " — highlighted in the note" : ""}
                     </span>
                   ) : (
-                    <span className="text-slate-500">
+                    <span className="text-nhs-mid">
                       No sentence in the note addresses this rule.
                     </span>
                   )}
                 </p>
                 {unresolved.length > 0 ? (
-                  <p className="mt-1 rounded bg-rose-100 px-1.5 py-1 text-xs font-semibold text-rose-900">
+                  <p className="mt-1.5 rounded bg-[#FBE7E5] px-2 py-1 text-[13px] font-bold text-nhs-red">
                     Invalid citation: sentence {unresolved.join(", ")} is not in
                     the numbered note, so this verdict cannot be checked.
                   </p>
@@ -171,67 +183,75 @@ function TrialCard({
 }) {
   const { candidate, judgment } = trial;
   const category = ELIGIBILITY_CATEGORIES[judgment.category];
+  const band = category.accent ?? "bg-nhs-mid text-white";
+  const missing = judgment.missing_facts.length;
+  const compact = judgment.category === "excluded" && !isOpen;
 
   return (
-    <li className="rounded-lg border border-slate-200 bg-white">
+    <li
+      className={`card overflow-hidden transition-shadow ${
+        isOpen ? "ring-4 ring-nhs-aqua" : "hover:ring-2 hover:ring-white/70"
+      }`}
+    >
       <button
         type="button"
         onClick={() => onToggleTrial(candidate.nct_id)}
         aria-expanded={isOpen}
-        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50"
+        className="block w-full text-left"
       >
-        <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-slate-400">
-          {trial.rank}
+        <span className={`flex items-center gap-3 px-4 font-bold ${compact ? "py-1 text-[13px]" : "py-1.5 text-[14px]"} ${band}`}>
+          <span className="tabular">Rank {trial.rank}</span>
+          <span aria-hidden className="opacity-60">·</span>
+          <span>{category.text}</span>
+          <span className="ml-auto tabular">score {formatFinalScore(trial.score)}</span>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <code className="text-xs font-semibold text-slate-900">
-              {candidate.nct_id}
-            </code>
-            <Chip className={category.className} text={category.text} />
-            {candidate.phase ? (
-              <span className="text-xs text-slate-500">{candidate.phase}</span>
-            ) : null}
-            {candidate.status ? (
-              <span className="text-xs text-slate-500">{candidate.status}</span>
-            ) : null}
+        <span className="flex items-start gap-4 px-4 pb-4 pt-3">
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <code className="font-mono text-[14px] font-bold text-nhs-blue">
+                {candidate.nct_id}
+              </code>
+              {candidate.phase ? (
+                <span className="tag bg-nhs-pale text-nhs-ink">{candidate.phase}</span>
+              ) : null}
+              {candidate.status ? (
+                <span className="tag bg-nhs-pale font-semibold text-nhs-mid">{candidate.status}</span>
+              ) : null}
+            </span>
+            <span className={`mt-1 block font-bold text-nhs-ink ${compact ? "truncate text-[15px] leading-6" : "text-[16px] leading-6"}`}>
+              {candidate.title}
+            </span>
+            <span className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-nhs-mid">
+              <span aria-hidden className="h-1.5 w-28 overflow-hidden rounded-full bg-nhs-line">
+                <span
+                  className="block h-full rounded-full bg-nhs-green"
+                  style={{ width: formatPercent(judgment.confirmed_fraction) }}
+                />
+              </span>
+              <span className="tabular">
+                rules confirmed {formatPercent(judgment.confirmed_fraction)} ·{" "}
+                {judgment.judgments.length} rules judged
+                {missing > 0 ? ` · ${missing} missing fact${missing === 1 ? "" : "s"}` : ""}
+              </span>
+            </span>
           </span>
-          <span className="mt-1 block text-sm font-medium leading-6 text-slate-900">
-            {candidate.title}
+          <span className="mt-1 text-nhs-blue">
+            <Chevron open={isOpen} />
           </span>
-          <span className="mt-1 block text-xs text-slate-500">
-            score {formatScore(trial.score)} · rules confirmed{" "}
-            {formatPercent(judgment.confirmed_fraction)} ·{" "}
-            {judgment.judgments.length} rules judged
-            {judgment.missing_facts.length > 0
-              ? ` · ${judgment.missing_facts.length} missing fact${
-                  judgment.missing_facts.length === 1 ? "" : "s"
-                }`
-              : ""}
-          </span>
-        </span>
-        <span aria-hidden className="shrink-0 pt-1 text-xs text-slate-400">
-          {isOpen ? "Close" : "Open"}
         </span>
       </button>
 
       {isOpen ? (
-        <div className="space-y-4 border-t border-slate-200 px-4 py-4">
+        <div className="divide-y divide-nhs-line border-t border-nhs-line">
           {judgment.summary ? (
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                What this trial is, in plain language
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-slate-800">
-                {judgment.summary}
-              </p>
+            <div className="px-4 py-4">
+              <h3 className="heading text-[15px]">What this trial is, in plain language</h3>
+              <p className="mt-1 max-w-[72ch] text-[15px] leading-7 text-nhs-ink">{judgment.summary}</p>
             </div>
           ) : null}
 
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Eligibility rules
-            </h3>
+          <div className="py-4">
+            <h3 className="heading px-4 text-[15px]">Eligibility rules</h3>
             <div className="mt-2">
               <RuleTable
                 trial={trial}
@@ -242,44 +262,45 @@ function TrialCard({
             </div>
           </div>
 
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Missing facts
-            </h3>
-            {judgment.missing_facts.length > 0 ? (
+          <div className="px-4 py-4">
+            <h3 className="heading text-[15px]">Missing facts</h3>
+            {missing > 0 ? (
               <>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-[14px] leading-6 text-nhs-mid">
                   These would settle the rules the system abstained on. They are
                   gaps in the note, not errors.
                 </p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-slate-800">
+                <ul className="mt-2 grid gap-1.5 text-[14px] text-nhs-ink">
                   {judgment.missing_facts.map((fact) => (
-                    <li key={fact}>{fact}</li>
+                    <li key={fact} className="flex gap-2.5 rounded bg-nhs-pale px-3 py-2 leading-6">
+                      <span aria-hidden className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-nhs-blue" />
+                      {fact}
+                    </li>
                   ))}
                 </ul>
               </>
             ) : (
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-[14px] text-nhs-mid">
                 None. Every rule was settled from the note.
               </p>
             )}
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-4 text-[14px] text-nhs-ink sm:grid-cols-4">
             <div>
-              <dt className="text-slate-500">Retrieval rank</dt>
-              <dd>{candidate.retrieval_rank ?? "—"}</dd>
+              <dt className="text-[13px] font-bold text-nhs-mid">Retrieval rank</dt>
+              <dd className="tabular">{candidate.retrieval_rank ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">RRF</dt>
-              <dd>{formatScore(candidate.rrf_score)}</dd>
+              <dt className="text-[13px] font-bold text-nhs-mid">RRF</dt>
+              <dd className="tabular">{formatScore(candidate.rrf_score)}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Rerank</dt>
-              <dd>{formatScore(candidate.rerank_score)}</dd>
+              <dt className="text-[13px] font-bold text-nhs-mid">Rerank</dt>
+              <dd className="tabular">{formatScore(candidate.rerank_score)}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Age / sex bounds</dt>
+              <dt className="text-[13px] font-bold text-nhs-mid">Age / sex bounds</dt>
               <dd>
                 {candidate.min_age_years ?? "any"}–
                 {candidate.max_age_years ?? "any"} ·{" "}
@@ -307,32 +328,44 @@ export function TrialResults({
 }: TrialResultsProps) {
   if (results.length === 0) {
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <p className="text-sm text-slate-600">
+      <section className="card p-5">
+        <p className="text-[14px] text-nhs-mid">
           No trials to show yet. Submit a note, or load the sample run.
         </p>
       </section>
     );
   }
 
+  // Split where the API's order first reaches an excluded trial. Nothing is
+  // re-sorted: the split only adds space between the two runs of the list.
+  const firstExcluded = results.findIndex((trial) => trial.judgment.category === "excluded");
+  const groups =
+    firstExcluded > 0 ? [results.slice(0, firstExcluded), results.slice(firstExcluded)] : [results];
+  const card = (trial: RankedTrial) => (
+    <TrialCard
+      key={trial.candidate.nct_id}
+      trial={trial}
+      isOpen={openNctId === trial.candidate.nct_id}
+      onToggleTrial={onToggleTrial}
+      selectedRuleKey={selectedRuleKey}
+      onSelectRule={onSelectRule}
+      validSentenceIds={validSentenceIds}
+    />
+  );
+
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <h2 className="mb-3 text-[20px] font-bold text-white">
         Ranked trials ({results.length})
       </h2>
-      <ul className="space-y-2">
-        {results.map((trial) => (
-          <TrialCard
-            key={trial.candidate.nct_id}
-            trial={trial}
-            isOpen={openNctId === trial.candidate.nct_id}
-            onToggleTrial={onToggleTrial}
-            selectedRuleKey={selectedRuleKey}
-            onSelectRule={onSelectRule}
-            validSentenceIds={validSentenceIds}
-          />
-        ))}
-      </ul>
+      {groups.map((group, index) => (
+        <ul
+          key={index}
+          className={`space-y-3 ${index > 0 ? "mt-8 border-t border-white/30 pt-8" : ""}`}
+        >
+          {group.map(card)}
+        </ul>
+      ))}
     </section>
   );
 }
