@@ -1,5 +1,12 @@
 # Beacon — architecture
 
+> **Out of date: written on 8 November 2026, before retrieval, the worker,
+> ingestion and the console were built.** Where this file calls a service a
+> "skeleton" or the console "not built", that is no longer true. The design
+> reasoning still holds. For the system as it runs today, read
+> [`Beacon_System_Guide.pdf`](Beacon_System_Guide.pdf) and the
+> [README](../README.md).
+
 > **Decision support, not medical advice.** Evaluated on a public benchmark
 > with **synthetic** patient notes. No clinical validity is claimed anywhere in
 > this document.

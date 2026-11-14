@@ -93,9 +93,9 @@ class TestRetrievalContract:
     def test_defaults_match_the_design(self) -> None:
         req = SearchRequest(queries=[RankedQuery(rank=1, text="nsclc")])
         assert req.fuse_top_k == 100, "bi-encoder stage keeps 100"
-        assert req.rerank_top_k == 20, "cross-encoder stage keeps 20"
+        assert req.rerank_top_k == 10, "10 candidates go to the rule checker (14 Nov)"
         assert req.rrf_k == 60, "RRF constant k=60"
-        assert req.use_rerank is True
+        assert req.use_rerank is False, "reranker measured on TREC 2021, no gain; off"
 
     def test_at_least_one_query_is_required(self) -> None:
         with pytest.raises(ValidationError):

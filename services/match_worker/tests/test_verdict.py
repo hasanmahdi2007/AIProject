@@ -148,7 +148,7 @@ def test_ranking_puts_verdict_first_and_retrieval_last() -> None:
 
 
 def test_score_is_out_of_five_with_one_band_per_verdict() -> None:
-    def scored(label: str, kind: str = "inclusion", rank: int = 1) -> float:
+    def scored(label: CriterionLabel, kind: CriterionKind = "inclusion", rank: int = 1) -> float:
         judgment = derive_trial_judgment(
             nct_id="A", judgments=[_judgment("a", kind, label)], note=NOTE
         )
