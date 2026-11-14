@@ -85,6 +85,7 @@ __all__ = [
     "ABLATION_TABLE",
     "AGE_FILTER_CENSUS",
     "BASELINE_CONFIG",
+    "FREE_ABLATION_TABLE",
     "FULL_SYSTEM",
     "QUERY_COUNT_SWEEP",
     "AblationReport",
@@ -183,6 +184,22 @@ class RunConfig:
                 f"({self.fuse_top_k}); the reranker cannot see more than it is given"
             )
 
+    @property
+    def requires_llm(self) -> bool:
+        """Whether producing this row costs an Anthropic call.
+
+        The distinction is worth having in code rather than in a comment,
+        because the components and the rows diverge: a cross-encoder reranker
+        is a free local model, but the cumulative ``plus_rerank`` row stacks it
+        on LLM query generation and therefore is not free. Reading the first
+        fact as the second would stall measurements that need no approval.
+
+        ``llm_rule_matching`` is by far the expensive half - one call per
+        candidate trial, 20 per patient - while query generation is a single
+        call per patient.
+        """
+        return self.llm_query_generation or self.llm_rule_matching
+
     def to_search_request(
         self, queries: Sequence[RankedQuery], filters: AgeSexFilter
     ) -> SearchRequest:
@@ -269,6 +286,17 @@ PLUS_FILTERS = RunConfig(
     use_rerank=True,
     apply_age_sex_filters=True,
 )
+PLUS_RERANK_NO_LLM = RunConfig(
+    name="plus_rerank_no_llm",
+    description="hybrid RRF + cross-encoder rerank, patient note as the query (no LLM)",
+    use_rerank=True,
+)
+PLUS_FILTERS_NO_LLM = RunConfig(
+    name="plus_age_sex_filters_no_llm",
+    description="... + age/sex hard filters, patient note as the query (no LLM)",
+    use_rerank=True,
+    apply_age_sex_filters=True,
+)
 FULL_SYSTEM = RunConfig(
     name="full_system",
     description="... + LLM rule matching (the complete pipeline)",
@@ -294,6 +322,44 @@ ABLATION_TABLE: Final[tuple[RunConfig, ...]] = (
 Rows 1-3 are alternatives to each other; rows 4-8 each add one thing to the row
 above, which is what makes the paired comparison in :class:`AblationRow`
 interpretable as "what did *this* component contribute".
+"""
+
+FREE_ABLATION_TABLE: Final[tuple[RunConfig, ...]] = (
+    BM25_ONLY,
+    DENSE_ONLY,
+    HYBRID_RRF,
+    PLUS_RERANK_NO_LLM,
+    PLUS_FILTERS_NO_LLM,
+)
+"""The ablation ladder that needs **zero Anthropic calls**, end to end.
+
+Every component here is a local model or an index operation: BM25, bge-small
+embeddings, RRF, the bge-reranker cross-encoder and typed payload filters. All
+five rows search with the **patient note itself** as the query, so none of them
+needs query generation.
+
+This exists because of an easy and expensive misreading of
+:data:`ABLATION_TABLE`. That table is *cumulative*, so its ``plus_rerank`` and
+``plus_age_sex_filters`` rows sit on top of ``llm_query_generation=True,
+query_count=3`` - the components are free but the rows are not, and only three
+of its eight rows cost nothing. Reading "the reranker is a local model" as "the
+rerank row is free" would mean waiting on a spend approval for the rerank and
+filter measurements, which this table's last two rows take at no cost.
+
+Measuring Recall@100 needs 100 candidates back. Every row here keeps the
+default ``rerank_top_k=20``, which is right for nDCG@10 and P@10 but would make
+"Recall@100" silently mean recall at 20. The run-file generator that consumes
+this table must request ``rerank_top_k=fuse_top_k=100`` for the recall pass
+(``dataclasses.replace`` on each row), not use these rows verbatim.
+
+With this table, **Recall@100 - the metric that governs the whole system - and
+the dense/sparse/fusion/rerank/filter contributions are all measurable for
+$0.00** as soon as the ingest completes. What it cannot measure is the value of
+LLM query generation or of LLM rule matching; those two questions, and only
+those two, need approved spend.
+
+:attr:`RunConfig.requires_llm` is the machine-checkable version of this claim,
+and a test asserts every row here is free rather than trusting this docstring.
 """
 
 BASELINE_CONFIG: Final = BM25_ONLY
