@@ -244,6 +244,14 @@ class Settings(BaseSettings):
     "any website may call the API" is the wrong default even in dev. Set
     ``BEACON_CORS_ALLOW_ORIGINS='["https://..."]'`` to deploy elsewhere."""
 
+    progress_bridge: bool = True
+    """Run the gateway's Kafka -> Redis progress bridge (``gateway.bridge``).
+
+    On by default: without it the console only learns a run finished from the
+    SSE stream's heartbeat re-read of Postgres. ``BEACON_PROGRESS_BRIDGE=false``
+    turns it off. The gateway's unit tests pass ``create_app(progress_bridge=False)``
+    instead, so that starting an app never opens a Kafka connection."""
+
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)

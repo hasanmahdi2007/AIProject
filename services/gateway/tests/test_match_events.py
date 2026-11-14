@@ -37,7 +37,7 @@ def _client(
     messages: list[dict[str, Any] | None] | None = None,
     rows: dict[tuple[str, str], Any] | None = None,
 ) -> tuple[TestClient, FakeRedis]:
-    app = create_app()
+    app = create_app(progress_bridge=False)
     session = FakeSession(
         rows=rows
         if rows is not None
